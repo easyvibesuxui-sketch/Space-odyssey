@@ -143,6 +143,8 @@ export class Turrets {
     const model = buildTurretModel(type, this.glowTex);
     model.root.position.copy(slot.pos);
     model.root.quaternion.setFromUnitVectors(UP, slot.normal);
+    // lookAt() needs the platform's own up, or the head rolls sideways on a sphere.
+    model.head.up.copy(slot.normal);
     this.scene.add(model.root);
     slot.turret = { type, level: 1, spent: CONFIG.turrets.types[type].cost, model, cooldown: 0.5, target: null, gunIndex: 0 };
     this._refreshPips(slot.turret);
@@ -180,6 +182,14 @@ export class Turrets {
       const t = slot.turret;
       if (!t) continue;
       const m = t.model;
+      // Under manual control: the player aims and fires (see TurretControl).
+      if (t.manned) {
+        if (t.disabled > 0) {
+          t.disabled -= dt;
+          if (t.disabled <= 0) this._setPowered(t, true);
+        }
+        continue;
+      }
       // Knocked out by an EMP: dark and silent until it reboots.
       if (t.disabled > 0) {
         t.disabled -= dt;
@@ -338,5 +348,5 @@ function buildTurretModel(type, glowTex) {
   halo.position.y = 0.6;
   root.add(halo);
 
-  return { root, head, muzzles, pips, core };
+  return { root, head, muzzles, pips, core, rim, halo };
 }

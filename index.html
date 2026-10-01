@@ -80,8 +80,16 @@
       <div id="indicators"></div>
       <div id="banner"><div class="banner-title" id="banner-title"></div><div class="banner-sub" id="banner-sub"></div></div>
       <div id="warning"></div>
+      <div id="turret-prompt"></div>
       <div id="crosshair"></div>
       <div id="damage-flash"></div>
+    </div>
+
+    <!-- Manual turret control -->
+    <div id="turret-ui" class="hidden">
+      <div class="turret-name" id="turret-name"></div>
+      <div class="turret-status" id="turret-status"></div>
+      <button id="turret-exit" class="hud-btn">EXIT TURRET <kbd class="desktop-only">F</kbd></button>
     </div>
 
     <!-- Tactical build view -->
@@ -114,6 +122,7 @@
       <button id="fire-btn">FIRE</button>
       <button id="boost-btn">BOOST</button>
       <button id="use-btn" class="hidden">USE</button>
+      <button id="man-btn" class="hidden">MAN</button>
     </div>
 
     <!-- Credits -->

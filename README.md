@@ -9,7 +9,9 @@ If the planet's HP reaches zero the game is over; if your ship is destroyed it r
 Between waves, open the **tactical view** (B / BUILD) to spend coins on orbital turrets:
 Laser Turret (fast, anti-fighter), Missile Battery (homing, splash) and Shield Generator
 (reduces planet damage). Turrets upgrade to level 3 and sell for 50%. Calling the next wave
-early (N / NEXT WAVE) pays bonus coins.
+early (N / NEXT WAVE) pays bonus coins. You can also **take control of any turret** (fly close
+and press F, or TAKE CONTROL in the tactical view): aim from the gunner's seat with +50% damage,
+lock missiles onto targets, or overcharge the planetary shield.
 
 Every level ends with a **boss** (they rotate and get tougher each cycle):
 **Dreadnought** (hull shielded while its orbiting drones live), **Carrier** (launches fighter
@@ -42,6 +44,7 @@ npm run build    # production build in dist/
 | W / S: throttle · A / D: roll · arrows: pitch/yaw | |
 | Shift: boost | BOOST button |
 | V: cockpit / chase view | VIEW button |
+| F near a turret: take manual control (F/Esc to exit) | MAN button |
 | B: tactical/build view · N: call next wave early | BUILD / NEXT WAVE buttons |
 | Base: WASD walk · mouse look (click to capture) · E interact · Shift run | Stick walk · drag look · tap / USE interact |
 
@@ -55,6 +58,7 @@ npm run build    # production build in dist/
 - `src/world/` – sky/nebula/sun, procedural planet, asteroid belt, space dust
 - `src/systems/` – lasers, missiles, turrets, waves, particles/explosions, coin pickups
 - `src/ui/Hud.js` – HUD, radar, off-screen enemy markers, banners
+- `src/systems/TurretControl.js` – manual turret control (gunner view, lock-on, overcharge)
 - `src/ui/BuildMode.js` – tactical view: orbit camera, slot picking, build/upgrade/sell panel
 - `src/base/Hangar.js` – first-person home base (hangar, ship on its pad, terminals, view to the planet)
 - `src/ui/BaseUI.js` – base prompts and panels (cargo, ship upgrades, repair, launch)

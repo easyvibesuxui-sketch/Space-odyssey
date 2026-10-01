@@ -22,6 +22,7 @@ import { Turrets } from './systems/Turrets.js';
 import { Missiles } from './systems/Missiles.js';
 import { Hud } from './ui/Hud.js';
 import { BuildMode } from './ui/BuildMode.js';
+import { TurretControl } from './systems/TurretControl.js';
 import { BaseUI } from './ui/BaseUI.js';
 import { Hangar } from './base/Hangar.js';
 import { emptyUpgrades, applyUpgrades } from './systems/Upgrades.js';
@@ -136,7 +137,7 @@ export class Game {
           kills: this.levelKills * 2,
         };
         setTimeout(() => {
-          if (this.state === 'playing' || this.state === 'build') this.enterBase(cargo);
+          if (this.state === 'playing' || this.state === 'build' || this.state === 'turret') this.enterBase(cargo);
         }, 2600);
       },
     });
@@ -180,6 +181,8 @@ export class Game {
     this.setView(this.viewMode);
 
     this.build = new BuildMode(this);
+    this.turretControl = new TurretControl(this);
+    this.overcharge = 0; // seconds of shield overcharge left (from a manned Shield Generator)
     this.hangar = new Hangar(this);
     this.baseUI = new BaseUI(this);
     this.fadeEl = document.getElementById('fade');
@@ -198,7 +201,12 @@ export class Game {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       if (this.state === 'base') return;
-      if (e.code === 'KeyB') this.toggleBuild();
+      if (this.state === 'turret') {
+        if (e.code === 'KeyF' || e.code === 'Escape') this.turretControl.exit();
+        return;
+      }
+      if (e.code === 'KeyF') this.turretControl.tryEnterNearest();
+      else if (e.code === 'KeyB') this.toggleBuild();
       else if (e.code === 'KeyV') this.toggleView();
       else if (e.code === 'Escape' && this.build.active) this.build.exit();
       else if (e.code === 'KeyN' || e.code === 'Enter') this.callNextWave();
@@ -233,6 +241,8 @@ export class Game {
 
   enterBase(cargo) {
     if (this.build.active) this.build.exit();
+    if (this.turretControl.active) this.turretControl.exit();
+    this.overcharge = 0;
     this._fadeThen(() => {
       // Any coins still floating around are beamed aboard.
       for (const c of this.pickups.coins) if (c.active) this.coins += c.value;
@@ -360,7 +370,7 @@ export class Game {
   }
 
   callNextWave() {
-    if (this.state !== 'playing' || this.waves.state !== 'break') return;
+    if ((this.state !== 'playing' && this.state !== 'turret') || this.waves.state !== 'break') return;
     const bonus = this.waves.skip();
     if (bonus > 0) {
       this.coins += bonus;
@@ -370,6 +380,8 @@ export class Game {
 
   restart() {
     if (this.build.active) this.build.exit();
+    if (this.turretControl.active) this.turretControl.exit();
+    this.overcharge = 0;
     if (this.state === 'base') {
       this.hangar.exit();
       this.baseUI.hide();
@@ -440,16 +452,25 @@ export class Game {
       this.hud.update(this);
       return;
     }
-    const playing = this.state === 'playing';
+    const manning = this.state === 'turret';
+    const playing = this.state === 'playing' || manning;
     this.input.update();
 
     if (playing) this.waves.update(dt);
 
-    this._updateControls(dt, playing);
-    if (this.ship.alive) this.ship.update(dt, this.controls, this.time);
-    this._updateAim();
+    if (manning) {
+      // The player is in a turret: the docked ship idles, the turret takes the input.
+      this.turretControl.update(dt);
+    } else {
+      this._updateControls(dt, playing);
+      if (this.ship.alive) this.ship.update(dt, this.controls, this.time);
+      this._updateAim();
+      if (playing && this.ship.alive) this._handleFiring(dt);
+    }
 
-    if (playing && this.ship.alive) this._handleFiring(dt);
+    // Shield overcharge from a manned Shield Generator.
+    if (this.overcharge > 0) this.overcharge = Math.max(0, this.overcharge - dt);
+    this.planet.setShield(this.shieldReduction);
 
     this.planet.update(dt);
     this.asteroids.update(dt);
@@ -501,7 +522,8 @@ export class Game {
     }
 
     this.effects.update(dt, 0, this.camera);
-    this._updateCamera(dt);
+    if (!manning) this._updateCamera(dt);
+    this.turretControl.updatePrompt();
     this.dust.update(this.camera.position, this.ship.velocity);
     this.sky.update(this.camera, this.time);
 
@@ -817,9 +839,13 @@ export class Game {
     }, points.length * 180 + 200);
   }
 
+  get shieldReduction() {
+    return Math.min(0.9, this.turrets.shieldReduction + (this.overcharge > 0 ? 0.5 : 0));
+  }
+
   _damagePlanet(amount, at) {
-    if (this.state !== 'playing') return;
-    const reduction = this.turrets.shieldReduction;
+    if (this.state !== 'playing' && this.state !== 'turret') return;
+    const reduction = this.shieldReduction;
     amount *= 1 - reduction;
     this.planetHp = Math.max(0, this.planetHp - amount);
     this.planet.flash(reduction > 0, at);
@@ -857,6 +883,7 @@ export class Game {
   }
 
   _onPlanetDestroyed() {
+    if (this.turretControl.active) this.turretControl.exit();
     this.state = 'over';
     this.effects.shake = 1;
     this.audio.explosion(2.5);

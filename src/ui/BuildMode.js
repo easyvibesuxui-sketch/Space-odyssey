@@ -139,6 +139,10 @@ export class BuildMode {
       game.coins -= cost;
       game.turrets.upgrade(slot);
       game.audio.build?.();
+    } else if (action === 'control') {
+      this.exit();
+      game.turretControl.enter(slot);
+      return;
     } else if (action === 'sell') {
       game.coins += game.turrets.sellValue(slot.turret);
       game.turrets.sell(slot);
@@ -198,6 +202,7 @@ export class BuildMode {
     this.panel.innerHTML = `${summary}
       <div class="panel-title" style="color:${def.color}">${def.name} · Level ${t.level}</div>
       <div class="stats">${stats}</div>
-      <div class="actions">${upgradeBtn}<button class="action sell" data-action="sell">SELL +${turrets.sellValue(t)}</button></div>`;
+      <div class="actions">${upgradeBtn}<button class="action sell" data-action="sell">SELL +${turrets.sellValue(t)}</button></div>
+      <div class="actions"><button class="action control" data-action="control">TAKE CONTROL ▶</button></div>`;
   }
 }
