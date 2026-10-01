@@ -142,7 +142,7 @@ export class Ship {
   }
 }
 
-function buildShipModel() {
+export function buildShipModel() {
   const root = new THREE.Group();
   const roll = new THREE.Group();
   root.add(roll);

@@ -11,6 +11,12 @@ Laser Turret (fast, anti-fighter), Missile Battery (homing, splash) and Shield G
 (reduces planet damage). Turrets upgrade to level 3 and sell for 50%. Calling the next wave
 early (N / NEXT WAVE) pays bonus coins.
 
+After every 5th wave you return to your **home base**: a first-person hangar where you walk
+around, unload the level's cargo (rewards), upgrade your ship at the Ship Systems terminal
+(laser power, fire rate, hull, shield, engines, coin magnet — 5 levels each), repair the
+homeworld, then board your ship to launch the next level. Progress is saved at the base
+(CONTINUE on the title screen, RETRY FROM BASE after a defeat).
+
 **Play:** https://easyvibesuxui-sketch.github.io/Space-odyssey/
 
 ## Run
@@ -30,6 +36,7 @@ npm run build    # production build in dist/
 | W / S: throttle · A / D: roll · arrows: pitch/yaw | |
 | Shift: boost | BOOST button |
 | B: tactical/build view · N: call next wave early | BUILD / NEXT WAVE buttons |
+| Base: WASD walk · mouse look (click to capture) · E interact · Shift run | Stick walk · drag look · tap / USE interact |
 
 ## Structure
 
@@ -41,5 +48,8 @@ npm run build    # production build in dist/
 - `src/systems/` – lasers, missiles, turrets, waves, particles/explosions, coin pickups
 - `src/ui/Hud.js` – HUD, radar, off-screen enemy markers, banners
 - `src/ui/BuildMode.js` – tactical view: orbit camera, slot picking, build/upgrade/sell panel
+- `src/base/Hangar.js` – first-person home base (hangar, ship on its pad, terminals, view to the planet)
+- `src/ui/BaseUI.js` – base prompts and panels (cargo, ship upgrades, repair, launch)
+- `src/systems/Upgrades.js` – ship upgrade definitions; `src/core/Save.js` – localStorage save
 - `src/core/` – input (keyboard/mouse/touch), procedural audio, asset loading
-- `public/assets/` – Kling-generated coin, turret icons, preloader video and poster
+- `public/assets/` – Kling-generated coin, turret and upgrade icons, preloader video and poster

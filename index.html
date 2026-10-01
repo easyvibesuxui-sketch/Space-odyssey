@@ -25,7 +25,10 @@
           <div class="loader-bar"><div class="loader-fill" id="loader-fill"></div></div>
           <span class="loader-pct" id="loader-pct">0%</span>
         </div>
-        <button id="launch-btn" class="launch-btn" disabled>LOADING…</button>
+        <div class="launch-row">
+          <button id="launch-btn" class="launch-btn" disabled>LOADING…</button>
+          <button id="continue-btn" class="launch-btn secondary hidden">CONTINUE</button>
+        </div>
         <div class="controls-hint">
           <span class="desktop-only"><b>Mouse</b> steer &amp; aim · <b>Click</b> fire · <b>W/S</b> throttle · <b>A/D</b> roll · <b>Shift</b> boost</span>
           <span class="touch-only"><b>Stick</b> steer · <b>FIRE</b> shoot · <b>BOOST</b> speed</span>
@@ -83,11 +86,27 @@
       <div id="build-panel"></div>
     </div>
 
+    <!-- Home base (first person) -->
+    <div id="base-ui" class="hidden">
+      <div class="base-top">
+        <div class="base-title" id="base-title">HOME BASE</div>
+        <div class="coins"><img src="/assets/coin.png" alt="" /><span id="base-coins">0</span></div>
+      </div>
+      <div class="base-dot"></div>
+      <div id="base-prompt"></div>
+      <div class="base-hint desktop-only"><b>WASD</b> walk · <b>Mouse</b> look (click to capture) · <b>E</b> interact · <b>Shift</b> run</div>
+      <div class="base-hint touch-only"><b>Stick</b> walk · <b>Drag</b> look · <b>Tap</b> interact</div>
+      <div id="base-panel" class="hidden"></div>
+    </div>
+
+    <div id="fade"></div>
+
     <!-- Touch controls -->
     <div id="touch-controls" class="hidden">
       <div id="joystick"><div id="joystick-knob"></div></div>
       <button id="fire-btn">FIRE</button>
       <button id="boost-btn">BOOST</button>
+      <button id="use-btn" class="hidden">USE</button>
     </div>
 
     <!-- Game over -->
@@ -95,7 +114,10 @@
       <h2>PLANET LOST</h2>
       <p>Reached level <span id="final-level">1</span> · wave <span id="final-wave">1</span></p>
       <p>Score <span id="final-score">0</span> · Coins <span id="final-coins">0</span></p>
-      <button id="restart-btn" class="launch-btn">RELAUNCH</button>
+      <div class="launch-row">
+        <button id="retry-btn" class="launch-btn hidden">RETRY FROM BASE</button>
+        <button id="restart-btn" class="launch-btn secondary">NEW GAME</button>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

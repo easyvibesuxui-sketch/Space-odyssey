@@ -21,6 +21,10 @@ import { Turrets } from './systems/Turrets.js';
 import { Missiles } from './systems/Missiles.js';
 import { Hud } from './ui/Hud.js';
 import { BuildMode } from './ui/BuildMode.js';
+import { BaseUI } from './ui/BaseUI.js';
+import { Hangar } from './base/Hangar.js';
+import { emptyUpgrades, applyUpgrades } from './systems/Upgrades.js';
+import { loadSave, writeSave } from './core/Save.js';
 
 const AIM_DISTANCE = 500;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
@@ -60,7 +64,8 @@ export class Game {
     this.scene.add(fill);
 
     this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(this.renderPass);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.45, 0.9);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -103,11 +108,18 @@ export class Game {
         this.hud.banner('WAVE CLEARED', `Wave ${wave} destroyed · press BUILD to place turrets`);
       },
       onLevelComplete: ({ level }) => {
-        const bonus = 40 * level;
-        this.coins += bonus;
         this.score += 1000 * level;
-        this.planetHp = Math.min(CONFIG.planet.hp, this.planetHp + 25);
-        this.hud.banner(`LEVEL ${level} COMPLETE`, `+${bonus} coins · planet repaired +25`, { duration: 4000 });
+        this.hud.banner(`LEVEL ${level} COMPLETE`, 'Returning to base…', { duration: 2600 });
+        const cargo = {
+          level,
+          levelBonus: 60 * level,
+          integrity: Math.round(this.planetHp),
+          killCount: this.levelKills,
+          kills: this.levelKills * 2,
+        };
+        setTimeout(() => {
+          if (this.state === 'playing' || this.state === 'build') this.enterBase(cargo);
+        }, 2600);
       },
     });
 
@@ -120,6 +132,9 @@ export class Game {
     this.score = 0;
     this.coins = 0;
     this.planetHp = CONFIG.planet.hp;
+    this.levelKills = 0;
+    this.upgrades = emptyUpgrades();
+    applyUpgrades(this.upgrades);
 
     this.aimPoint = new THREE.Vector3();
     this.aimNdc = new THREE.Vector2(0, 0.13);
@@ -132,15 +147,23 @@ export class Game {
     this._m = new THREE.Matrix4();
 
     this.build = new BuildMode(this);
+    this.hangar = new Hangar(this);
+    this.baseUI = new BaseUI(this);
+    this.fadeEl = document.getElementById('fade');
     this.turretSoundCooldown = 0;
 
     window.addEventListener('resize', () => this.onResize());
     document.getElementById('restart-btn').addEventListener('click', () => this.restart());
+    document.getElementById('retry-btn').addEventListener('click', () => {
+      const save = loadSave();
+      if (save) this._fadeThen(() => this.loadGame(save));
+    });
     document.getElementById('build-btn').addEventListener('click', () => this.toggleBuild());
     this.nextWaveBtn = document.getElementById('next-wave-btn');
     this.nextWaveBtn.addEventListener('click', () => this.callNextWave());
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
+      if (this.state === 'base') return;
       if (e.code === 'KeyB') this.toggleBuild();
       else if (e.code === 'Escape' && this.build.active) this.build.exit();
       else if (e.code === 'KeyN' || e.code === 'Enter') this.callNextWave();
@@ -153,10 +176,114 @@ export class Game {
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
-  start() {
-    this.hud.show(true);
+  start(save = null) {
     document.getElementById('touch-controls').classList.toggle('hidden', !this.isTouch);
+    if (save) {
+      this.loadGame(save);
+    } else {
+      this.hud.show(true);
+      this.restart();
+    }
+  }
+
+  // ------------------------------------------------------------ home base
+
+  _fadeThen(fn) {
+    this.fadeEl.classList.add('on');
+    setTimeout(() => {
+      fn();
+      this.fadeEl.classList.remove('on');
+    }, 650);
+  }
+
+  enterBase(cargo) {
+    if (this.build.active) this.build.exit();
+    this._fadeThen(() => {
+      // Any coins still floating around are beamed aboard.
+      for (const c of this.pickups.coins) if (c.active) this.coins += c.value;
+      this.pickups.clear();
+      this.enemies.clear();
+      this.lasers.clear();
+      this.enemyLasers.clear();
+      this.turretLasers.clear();
+      this.missiles.clear();
+
+      this.state = 'base';
+      document.body.classList.add('base-mode');
+      this.hud.show(false);
+      this.renderPass.scene = this.hangar.scene;
+      this.renderPass.camera = this.hangar.camera;
+      this.bloom.strength = 0.3;
+      this.hangar.enter();
+      this.baseUI.show(cargo);
+      this.saveProgress(cargo);
+    });
+  }
+
+  launchFromBase() {
+    this._fadeThen(() => {
+      this.hangar.exit();
+      this.baseUI.hide();
+      document.body.classList.remove('base-mode');
+      this.renderPass.scene = this.scene;
+      this.renderPass.camera = this.camera;
+      this.bloom.strength = 0.7;
+      this.hud.show(true);
+
+      applyUpgrades(this.upgrades);
+      this.ship.reset();
+      this.camQuat.copy(this.ship.group.quaternion);
+      this.respawnTimer = 0;
+      this.levelKills = 0;
+      this.waves.state = 'break';
+      this.waves.wave = 0;
+      this.waves.timer = CONFIG.waves.firstBreak;
+      this.waves.queue = [];
+      this.state = 'playing';
+      this.saveProgress();
+      this.hud.banner(`LEVEL ${this.waves.level}`, 'The enemy fleet returns · reinforce your turrets', { duration: 3500 });
+    });
+  }
+
+  saveProgress(cargo = this.baseUI?.cargo ?? null) {
+    writeSave({
+      level: this.waves.level,
+      coins: this.coins,
+      score: this.score,
+      planetHp: this.planetHp,
+      upgrades: this.upgrades,
+      turrets: this.turrets.slots.filter((s) => s.turret).map((s) => ({ slot: s.index, type: s.turret.type, level: s.turret.level, spent: s.turret.spent })),
+      cargo,
+    });
+  }
+
+  // Restore a saved game and drop the player into the home base.
+  loadGame(save) {
+    document.getElementById('game-over').classList.add('hidden');
     this.restart();
+    this.waves.level = save.level;
+    this.coins = save.coins ?? CONFIG.startCoins;
+    this.score = save.score ?? 0;
+    this.planetHp = save.planetHp ?? CONFIG.planet.hp;
+    this.upgrades = { ...emptyUpgrades(), ...save.upgrades };
+    applyUpgrades(this.upgrades);
+    for (const t of save.turrets ?? []) {
+      const slot = this.turrets.slots[t.slot];
+      if (!slot || slot.turret || !CONFIG.turrets.types[t.type]) continue;
+      const built = this.turrets.build(slot, t.type);
+      built.level = Math.min(t.level, CONFIG.turrets.maxLevel);
+      built.spent = t.spent;
+      this.turrets._refreshPips(built);
+    }
+    this.planet.setShield(this.turrets.shieldReduction);
+    this.state = 'base';
+    document.body.classList.add('base-mode');
+    this.hud.show(false);
+    this.renderPass.scene = this.hangar.scene;
+    this.renderPass.camera = this.hangar.camera;
+    this.bloom.strength = 0.3;
+    this.hangar.enter();
+    this.baseUI.show(save.cargo ?? null);
   }
 
   toggleBuild() {
@@ -187,6 +314,15 @@ export class Game {
 
   restart() {
     if (this.build.active) this.build.exit();
+    if (this.state === 'base') {
+      this.hangar.exit();
+      this.baseUI.hide();
+      document.body.classList.remove('base-mode');
+      this.renderPass.scene = this.scene;
+      this.renderPass.camera = this.camera;
+      this.bloom.strength = 0.7;
+    }
+    this.hud.show(true);
     document.getElementById('game-over').classList.add('hidden');
     this.ship.reset();
     this.enemies.clear();
@@ -201,6 +337,10 @@ export class Game {
     this.score = 0;
     this.coins = CONFIG.startCoins;
     this.planetHp = CONFIG.planet.hp;
+    this.levelKills = 0;
+    this.upgrades = emptyUpgrades();
+    applyUpgrades(this.upgrades);
+    this.ship.reset(); // pick up the reset stats
     this.respawnTimer = 0;
     this.camQuat.copy(this.ship.group.quaternion);
     this.state = 'playing';
@@ -216,6 +356,7 @@ export class Game {
     this.composer.setSize(w, h);
     this.bloom.resolution.set(w, h);
     this.effects.onResize(this.pixelRatio);
+    this.hangar.onResize();
   }
 
   frame() {
@@ -227,6 +368,13 @@ export class Game {
   }
 
   update(dt) {
+    if (this.state === 'base') {
+      this.input.update();
+      this.hangar.update(dt, this.input, !this.baseUI.panelOpen);
+      this.planet.update(dt);
+      this.baseUI.update();
+      return;
+    }
     if (this.state === 'build') {
       // Paused: only the tactical camera and cosmetic bits move.
       this.build.update(dt, this.camera);
@@ -552,6 +700,7 @@ export class Game {
   }
 
   _onEnemyDestroyed(e) {
+    this.levelKills++;
     const cfg = CONFIG.enemies[e.type];
     const p = e.group.position;
     this.effects.explosion(p, e.radius * 1.3, 0);
@@ -592,6 +741,7 @@ export class Game {
       document.getElementById('final-wave').textContent = Math.max(this.waves.wave, 1);
       document.getElementById('final-score').textContent = this.score.toLocaleString('en-US');
       document.getElementById('final-coins').textContent = this.coins;
+      document.getElementById('retry-btn').classList.toggle('hidden', !loadSave());
       document.getElementById('game-over').classList.remove('hidden');
     }, 2400);
   }
