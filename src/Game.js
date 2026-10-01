@@ -222,32 +222,39 @@ export class Game {
   // Every game starts in the home base; the first level launches from the hangar.
   start(save = null, { promo = null } = {}) {
     document.getElementById('touch-controls').classList.toggle('hidden', !this.isTouch);
-    if (save) {
-      const data = { ...save };
-      if (promo && !(data.promosUsed ?? []).includes(promo.id)) {
-        data.coins = (data.coins ?? 0) + promo.coins;
-        data.promosUsed = [...(data.promosUsed ?? []), promo.id];
-      }
-      this.loadGame(data);
-      this.saveProgress(data.cargo ?? null);
-    } else {
-      this.newGame(promo);
-    }
-    if (promo) this.baseUI.toast(`PROMO ${promo.id} · +${promo.coins.toLocaleString('en-US')} coins`);
+    if (save) this.loadGame(save);
+    else this.newGame();
+    if (promo) this.applyPromo(promo);
   }
 
-  newGame(promo = null) {
+  newGame() {
     this.loadGame({
       level: 1,
-      coins: promo ? promo.coins : CONFIG.startCoins,
+      coins: CONFIG.startCoins,
       score: 0,
       planetHp: CONFIG.planet.hp,
       upgrades: {},
       turrets: [],
       cargo: null,
-      promosUsed: promo ? [promo.id] : [],
+      promosUsed: [],
     });
     this.saveProgress(null);
+  }
+
+  // Grants a promo code's coins once per save. Returns 'ok' or 'used'.
+  applyPromo(promo) {
+    this.promosUsed ??= [];
+    if (this.promosUsed.includes(promo.id)) {
+      this.baseUI.toast(`Promo ${promo.id} was already used in this save`);
+      return 'used';
+    }
+    this.promosUsed.push(promo.id);
+    this.coins += promo.coins;
+    this.audio.coin();
+    this.baseUI.refresh();
+    this.saveProgress();
+    this.baseUI.toast(`PROMO ${promo.id} · +${promo.coins.toLocaleString('en-US')} coins`);
+    return 'ok';
   }
 
   // ------------------------------------------------------------ home base

@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { UPGRADES, MAX_UPGRADE, upgradeCost, applyUpgrades } from '../systems/Upgrades.js';
+import { findPromo } from '../core/Promo.js';
 
 const BASE = import.meta.env.BASE_URL;
 const COIN = `<img class="coin-icon" src="${BASE}assets/coin.png" alt="" />`;
@@ -26,9 +27,18 @@ export class BaseUI {
     this.cargo = null;
 
     this.panel.addEventListener('click', (e) => this._onClick(e));
+    this.panel.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this._submitPromo();
+    });
+    $('base-promo-btn').addEventListener('click', () => {
+      if (this.panelOpen) this.close();
+      this.interact('promo');
+    });
     this.useBtn.addEventListener('click', () => this.interact(this.game.hangar.target));
     window.addEventListener('keydown', (e) => {
       if (this.game.state !== 'base' || e.repeat) return;
+      if (e.target instanceof HTMLInputElement) return; // typing a promo code
       if (e.code === 'KeyE') {
         if (this.panelOpen) this.close();
         else this.interact(this.game.hangar.target);
@@ -159,6 +169,18 @@ export class BaseUI {
       return;
     }
 
+    if (this.panelOpen === 'promo') {
+      this.panel.innerHTML = `${close}
+        <div class="panel-title" style="color:var(--gold)">Promo code</div>
+        <form class="promo-row" autocomplete="off" onsubmit="return false">
+          <input id="base-promo-input" type="text" inputmode="numeric" maxlength="16" placeholder="PROMO CODE" aria-label="Promo code" />
+          <button type="submit" class="promo-apply">APPLY</button>
+        </form>
+        <div id="base-promo-msg" class="promo-msg"></div>`;
+      setTimeout(() => document.getElementById('base-promo-input')?.focus(), 50);
+      return;
+    }
+
     if (this.panelOpen === 'launch') {
       const warn = this.cargo ? `<div class="panel-warn">You still have unloaded cargo (+${this.cargoTotal}) in the cargo bay.</div>` : '';
       this.panel.innerHTML = `${close}
@@ -169,11 +191,28 @@ export class BaseUI {
     }
   }
 
+  _submitPromo() {
+    const input = document.getElementById('base-promo-input');
+    const msg = document.getElementById('base-promo-msg');
+    if (!input || !msg) return;
+    const promo = findPromo(input.value);
+    if (!promo) {
+      msg.className = 'promo-msg bad';
+      msg.textContent = 'Invalid promo code';
+      return;
+    }
+    const res = this.game.applyPromo(promo);
+    msg.className = `promo-msg ${res === 'ok' ? 'ok' : 'bad'}`;
+    msg.textContent = res === 'ok' ? `✓ ${promo.label}` : 'Already used in this save';
+  }
+
   _onClick(e) {
     const btn = e.target.closest('button');
     if (!btn || btn.disabled) return;
     const g = this.game;
     const action = btn.dataset.action;
+    // The APPLY button submits the form; the 'submit' listener handles it (Enter does too).
+    if (btn.classList.contains('promo-apply')) return;
     if (action === 'close') {
       this.close();
       return;

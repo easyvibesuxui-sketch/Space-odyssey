@@ -29,7 +29,7 @@
           <button id="launch-btn" class="launch-btn" disabled>LOADING…</button>
           <button id="continue-btn" class="launch-btn secondary hidden">CONTINUE</button>
         </div>
-        <form id="promo-form" class="promo-row" autocomplete="off">
+        <form id="promo-form" class="promo-row" autocomplete="off" onsubmit="return false">
           <input id="promo-input" type="text" inputmode="numeric" maxlength="16" placeholder="PROMO CODE" aria-label="Promo code" />
           <button id="promo-btn" type="submit">APPLY</button>
         </form>
@@ -112,6 +112,7 @@
       <div class="base-top">
         <div class="base-title" id="base-title">HOME BASE</div>
         <div class="coins"><img src="/assets/coin.png" alt="" /><span id="base-coins">0</span></div>
+        <button id="base-promo-btn" class="hud-btn small">PROMO</button>
       </div>
       <div class="base-dot"></div>
       <div id="base-prompt"></div>

@@ -3,6 +3,7 @@ import { Audio } from './core/Audio.js';
 import { Game } from './Game.js';
 import { loadSave } from './core/Save.js';
 import { CREDITS } from './core/Models.js';
+import { findPromo } from './core/Promo.js';
 
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 document.body.classList.toggle('touch', isTouch);
@@ -26,9 +27,29 @@ requestAnimationFrame(animateBar);
 
 const audio = new Audio();
 
-const PROMO_CODES = {
-  1010: { id: '1010', coins: 10_000_000, label: '10,000,000 coins unlocked' },
+// Promo code on the title screen. Bound immediately (not after loading) so pressing APPLY
+// early can never fall through to a native form submit, which would reload the page.
+let promo = null;
+const promoInput = document.getElementById('promo-input');
+const promoMsg = document.getElementById('promo-msg');
+const applyPromo = () => {
+  promo = findPromo(promoInput.value);
+  if (!promoInput.value.trim()) {
+    promoMsg.className = '';
+    promoMsg.textContent = '';
+    return;
+  }
+  promoMsg.className = promo ? 'ok' : 'bad';
+  promoMsg.textContent = promo ? `✓ ${promo.label}` : 'Invalid promo code';
 };
+document.getElementById('promo-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  applyPromo();
+});
+promoInput.addEventListener('input', () => {
+  // Accept the code as soon as it's typed correctly.
+  if (findPromo(promoInput.value)) applyPromo();
+});
 
 // Credits for third-party 3D models (CC-BY requires attribution).
 document.getElementById('credits-list').innerHTML = CREDITS.map(
@@ -47,19 +68,9 @@ async function boot() {
   const save = loadSave();
   const continueBtn = document.getElementById('continue-btn');
 
-  // Promo codes. Applied when the player starts (new game) or continues.
-  let promo = null;
-  const promoMsg = document.getElementById('promo-msg');
-  document.getElementById('promo-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const code = document.getElementById('promo-input').value.trim().toUpperCase();
-    promo = PROMO_CODES[code] ?? null;
-    promoMsg.className = promo ? 'ok' : 'bad';
-    promoMsg.textContent = promo ? `✓ ${promo.label}` : 'Invalid promo code';
-    if (promo) audio.unlock();
-  });
-
   const begin = (fromSave) => {
+    // A typed code counts even if APPLY wasn't pressed.
+    applyPromo();
     audio.unlock();
     if (isTouch && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
