@@ -35,6 +35,7 @@ npm run build    # production build in dist/
 | Click / Space: fire | FIRE button (with aim assist) |
 | W / S: throttle · A / D: roll · arrows: pitch/yaw | |
 | Shift: boost | BOOST button |
+| V: cockpit / chase view | VIEW button |
 | B: tactical/build view · N: call next wave early | BUILD / NEXT WAVE buttons |
 | Base: WASD walk · mouse look (click to capture) · E interact · Shift run | Stick walk · drag look · tap / USE interact |
 
@@ -52,4 +53,17 @@ npm run build    # production build in dist/
 - `src/ui/BaseUI.js` – base prompts and panels (cargo, ship upgrades, repair, launch)
 - `src/systems/Upgrades.js` – ship upgrade definitions; `src/core/Save.js` – localStorage save
 - `src/core/` – input (keyboard/mouse/touch), procedural audio, asset loading
+- `src/core/Models.js` – GLB loading/normalisation (meshopt) and model credits
+- `public/models/` – compressed 3D models (originals ~118 MB → ~11 MB via gltf-transform: meshopt + WebP)
 - `public/assets/` – Kling-generated coin, turret and upgrade icons, preloader video and poster
+
+## Credits
+
+3D models from Sketchfab (shown in-game under *Credits*):
+
+- Player ship — “Spaceship COLAID1 50k” by Jungle Jim (CC-BY-4.0)
+- Enemy fighter — “Cool Alien Spaceship” by Jungle Jim (CC-BY-4.0)
+- Enemy bomber — “spaceship51” by mohamedhussien (CC-BY-4.0)
+- Bosses — “UNSA Destroyer / spaceship” by xaxary (CC-BY-4.0)
+- Cockpit — “New Futuristic Combat Jet Cockpit (Wip-1)” by 3DHaupt (**CC-BY-NC-4.0**, non-commercial)
+- Base corridor — “Sci-Fi Corridor - Revisited 2019” by Robert Berrier (CC-BY-4.0)

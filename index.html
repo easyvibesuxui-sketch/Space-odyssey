@@ -34,6 +34,7 @@
           <span class="touch-only"><b>Stick</b> steer · <b>FIRE</b> shoot · <b>BOOST</b> speed</span>
           <span class="mission">Enemy fleets are coming for your homeworld. Hold the line.</span>
         </div>
+        <button id="credits-btn" class="link-btn">Credits</button>
       </div>
     </div>
 
@@ -63,6 +64,7 @@
       </div>
       <div class="hud-actions">
         <button id="build-btn" class="hud-btn">BUILD <kbd class="desktop-only">B</kbd></button>
+        <button id="view-btn" class="hud-btn">VIEW <kbd class="desktop-only">V</kbd></button>
         <button id="next-wave-btn" class="hud-btn next hidden">NEXT WAVE ▶ <kbd class="desktop-only">N</kbd></button>
       </div>
       <div class="hud-top-center">
@@ -107,6 +109,14 @@
       <button id="fire-btn">FIRE</button>
       <button id="boost-btn">BOOST</button>
       <button id="use-btn" class="hidden">USE</button>
+    </div>
+
+    <!-- Credits -->
+    <div id="credits" class="overlay hidden">
+      <h3>CREDITS</h3>
+      <div id="credits-list"></div>
+      <p class="credits-note">Images, coin, icons and preloader video generated with Kling AI.</p>
+      <button id="credits-close" class="launch-btn secondary">CLOSE</button>
     </div>
 
     <!-- Game over -->

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { rand } from '../core/noise.js';
 import { makeRadialTexture } from '../world/Sky.js';
+import { instantiate, setFlash } from '../core/Models.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _m = new THREE.Matrix4();
@@ -15,7 +16,8 @@ const _radial = new THREE.Vector3();
 //  - Fighters dogfight the player when close, otherwise make strafing runs on the planet.
 //  - Bombers ignore the player, settle into a low orbit and bombard the planet.
 export class Enemies {
-  constructor(scene) {
+  constructor(scene, models = {}) {
+    this.models = models;
     this.scene = scene;
     this.list = [];
     this.glowTex = makeRadialTexture([[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,150,90,0.6)'], [1, 'rgba(255,40,0,0)']], 64);
@@ -60,7 +62,10 @@ export class Enemies {
   }
 
   _create(type) {
-    const model = type === 'bomber' ? buildBomber(this.glowTex) : buildFighter(this.glowTex);
+    const glb = this.models[type];
+    const model = glb
+      ? buildFromGLB(glb, this.glowTex, type)
+      : type === 'bomber' ? buildBomber(this.glowTex) : buildFighter(this.glowTex);
     this.scene.add(model.root);
     return {
       type,
@@ -170,7 +175,7 @@ export class Enemies {
       // Hit flash + engine flicker.
       if (e.flash > 0) {
         e.flash = Math.max(0, e.flash - dt * 6);
-        e.model.hullMat.emissive.setRGB(e.flash, e.flash * 0.5, e.flash * 0.3);
+        setFlash(e.model.flashMats, e.flash);
       }
       for (const g of e.model.glows) g.scale.setScalar(g.userData.size * (0.85 + Math.random() * 0.3));
     }
@@ -255,7 +260,8 @@ function buildFighter(glowTex) {
     guns.push(g);
   }
   root.scale.setScalar(1.35);
-  return { root, guns, glows, hullMat: m.hull };
+  m.hull.userData.baseEmissive = new THREE.Color(0, 0, 0);
+  return { root, guns, glows, flashMats: [m.hull] };
 }
 
 function buildBomber(glowTex) {
@@ -295,5 +301,25 @@ function buildBomber(glowTex) {
     guns.push(g);
   }
   root.scale.setScalar(1.4);
-  return { root, guns, glows, hullMat: m.hull };
+  m.hull.userData.baseEmissive = new THREE.Color(0, 0, 0);
+  return { root, guns, glows, flashMats: [m.hull] };
+}
+
+// GLB enemy: normalised model (nose -Z) + engine glows at the stern + gun muzzles at the bow.
+function buildFromGLB(model, glowTex, type) {
+  const root = new THREE.Group();
+  const { root: body, materials } = instantiate(model, { ownMaterials: true });
+  root.add(body);
+  const { x: W, y: H, z: L } = model.size;
+  const glows = [];
+  const engines = type === 'bomber' ? [[-0.12, 0], [0.12, 0]] : [[-0.18, -0.1], [0, -0.1], [0.18, -0.1]];
+  for (const [fx, fy] of engines) glows.push(addGlow(root, glowTex, fx * W, fy * H, L / 2 + 0.2, type === 'bomber' ? 3.6 : 2.6));
+  const guns = [];
+  for (const s of [-1, 1]) {
+    const g = new THREE.Object3D();
+    g.position.set(s * W * 0.12, -H * 0.1, -L / 2 - 0.3);
+    root.add(g);
+    guns.push(g);
+  }
+  return { root, guns, glows, flashMats: materials };
 }

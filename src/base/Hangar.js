@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Sky } from '../world/Sky.js';
-import { buildShipModel } from '../entities/Ship.js';
+import { makePlayerModel } from '../entities/Ship.js';
+import { instantiate } from '../core/Models.js';
 
 // Room layout (metres). The front (z = FRONT) is open to space.
 const HALF_W = 24;
@@ -42,6 +43,7 @@ export class Hangar {
     this._buildTerminal();
     this._buildCargo();
     this._buildOutside();
+    this._buildCorridor();
     this._bindLook(game.canvas);
   }
 
@@ -75,10 +77,29 @@ export class Hangar {
       wall.position.set(s * HALF_W, HEIGHT / 2, midZ);
       this.scene.add(wall);
     }
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W * 2, HEIGHT), wallMat);
-    back.position.set(0, HEIGHT / 2, BACK);
-    back.rotation.y = Math.PI;
-    this.scene.add(back);
+    // Back wall, with a doorway into the entrance corridor when the corridor model is loaded.
+    const corridor = this.game.assets.models?.corridor;
+    this.corridorLen = corridor ? corridor.size.z : 0;
+    const doorW = corridor ? corridor.size.x : 0;
+    const doorH = corridor ? corridor.size.y : 0;
+    const wallPiece = (w, h, x, y) => {
+      const geo = new THREE.PlaneGeometry(w, h);
+      // Keep the panel texture scale consistent across pieces.
+      const uv = geo.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / (HALF_W * 2)), uv.getY(i) * (h / HEIGHT));
+      const m = new THREE.Mesh(geo, wallMat);
+      m.position.set(x, y, BACK);
+      m.rotation.y = Math.PI;
+      this.scene.add(m);
+    };
+    if (corridor) {
+      const side = HALF_W - doorW / 2;
+      wallPiece(side, HEIGHT, -(doorW / 2 + side / 2), HEIGHT / 2);
+      wallPiece(side, HEIGHT, doorW / 2 + side / 2, HEIGHT / 2);
+      wallPiece(doorW, HEIGHT - doorH, 0, doorH + (HEIGHT - doorH) / 2);
+    } else {
+      wallPiece(HALF_W * 2, HEIGHT, 0, HEIGHT / 2);
+    }
 
     // Structural ribs along the walls and ceiling.
     for (let z = FRONT + 4; z < BACK; z += 8) {
@@ -182,10 +203,11 @@ export class Hangar {
     ring.position.set(PAD.x, 0.32, PAD.z);
     this.scene.add(ring);
 
-    const model = buildShipModel();
+    const model = makePlayerModel(this.game.assets.models);
+    const isGLB = !!this.game.assets.models?.player;
     const holder = new THREE.Group();
     holder.add(model.root);
-    holder.scale.setScalar(3.6);
+    holder.scale.setScalar(isGLB ? 2.8 : 3.6);
     holder.position.set(PAD.x, 3.0, PAD.z);
     this.scene.add(holder);
     for (const t of model.trails) t.scale.set(0.8, 0.8, 0.12);
@@ -226,14 +248,22 @@ export class Hangar {
     const projector = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.2, 20), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 2.2, 3.2) }));
     projector.position.set(0, 1.15, -0.35);
     g.add(projector);
-    const holoMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.6, 2.6), wireframe: true, transparent: true, opacity: 0.55 });
-    const holo = buildShipModel();
+    const playerGLB = this.game.assets.models?.player;
+    const holoMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.25, 1.0, 1.7),
+      wireframe: !playerGLB, // the GLB is too dense for a readable wireframe
+      transparent: true,
+      opacity: playerGLB ? 0.35 : 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const holo = makePlayerModel(this.game.assets.models);
     holo.root.traverse((o) => {
       if (o.isMesh) o.material = holoMat;
       if (o.isSprite) o.visible = false;
     });
     for (const t of holo.trails) t.visible = false;
-    holo.root.scale.setScalar(0.32);
+    holo.root.scale.setScalar(playerGLB ? 0.26 : 0.32);
     holo.root.position.set(0, 2.35, -0.35);
     g.add(holo.root);
     this.holo = holo.root;
@@ -292,6 +322,44 @@ export class Hangar {
     this.planetView = view;
   }
 
+  _buildCorridor() {
+    const model = this.game.assets.models?.corridor;
+    if (!model) return;
+    const { root } = instantiate(model);
+    // The model has sliding doors at both ends: remove them (the hangar end is open)
+    // and seal the far end with an airlock bulkhead instead.
+    root.traverse((o) => {
+      if (o.isMesh && /Doorway_door/i.test(o.name)) o.visible = false;
+    });
+    root.position.set(0, 0, BACK + model.size.z / 2);
+    this.scene.add(root);
+
+    // The model only has its left wall (it's meant to be mirrored): add a mirrored copy
+    // that keeps just the wall pieces, so the shared floor/pipes don't z-fight.
+    const mirror = instantiate(model).root;
+    mirror.traverse((o) => {
+      if (o.isMesh && !/Wall|Column|light/i.test(o.name)) o.visible = false;
+    });
+    mirror.scale.x = -1;
+    mirror.position.copy(root.position);
+    this.scene.add(mirror);
+
+    const { x: w, y: h, z: len } = model.size;
+    const bulkhead = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshStandardMaterial({ map: airlockTexture(), metalness: 0.6, roughness: 0.4, emissive: 0x220a00, emissiveIntensity: 1 })
+    );
+    bulkhead.position.set(0, h / 2, BACK + len - 0.35);
+    bulkhead.rotation.y = Math.PI;
+    this.scene.add(bulkhead);
+
+    for (const z of [BACK + len * 0.3, BACK + len * 0.75]) {
+      const l = new THREE.PointLight(0xffe2c4, 6, 7, 2);
+      l.position.set(0, h - 0.4, z);
+      this.scene.add(l);
+    }
+  }
+
   // ---------------------------------------------------------------- input
 
   _bindLook(canvas) {
@@ -345,7 +413,8 @@ export class Hangar {
 
   enter() {
     this.active = true;
-    this.pos.set(0, EYE, 13);
+    // Arrive through the entrance corridor if there is one.
+    this.pos.set(0, EYE, this.corridorLen ? BACK + this.corridorLen - 1.2 : 13);
     this.yaw = 0;
     this.pitch = 0.02;
     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -424,7 +493,11 @@ export class Hangar {
   _collide() {
     const p = this.pos;
     p.x = THREE.MathUtils.clamp(p.x, -HALF_W + 1.4, HALF_W - 1.4);
-    p.z = THREE.MathUtils.clamp(p.z, FRONT + 2.2, BACK - 1.2);
+    // The corridor is a narrow walkway behind the back wall.
+    const halfDoor = this.corridorLen ? this.game.assets.models.corridor.size.x / 2 - 0.55 : 0;
+    const inDoorway = this.corridorLen && Math.abs(p.x) < halfDoor;
+    p.z = THREE.MathUtils.clamp(p.z, FRONT + 2.2, inDoorway ? BACK + this.corridorLen - 0.9 : BACK - 1.2);
+    if (p.z > BACK - 1.2) p.x = THREE.MathUtils.clamp(p.x, -halfDoor, halfDoor);
     // Round obstacles: the landing pad/ship, the terminal and the cargo stack.
     for (const [c, r] of [[PAD, 9.6], [TERMINAL, 2.2], [CARGO, 4.2]]) {
       const dx = p.x - c.x;
@@ -499,6 +572,28 @@ function stripeTexture(radial = false) {
     }
   });
   tex.repeat.set(radial ? 12 : 16, 1);
+  return tex;
+}
+
+function airlockTexture() {
+  const tex = canvasTexture(256, 256, (g, w) => {
+    g.fillStyle = '#3a3f46';
+    g.fillRect(0, 0, w, w);
+    g.fillStyle = '#2a2e34';
+    g.fillRect(w * 0.18, w * 0.08, w * 0.64, w * 0.9);
+    g.strokeStyle = '#e8b830';
+    g.lineWidth = 6;
+    g.strokeRect(w * 0.18, w * 0.08, w * 0.64, w * 0.9);
+    g.fillStyle = '#e8b830';
+    g.font = 'bold 26px Orbitron, sans-serif';
+    g.textAlign = 'center';
+    g.fillText('AIRLOCK', w / 2, w * 0.45);
+    g.fillStyle = '#ff5040';
+    g.beginPath();
+    g.arc(w / 2, w * 0.6, 8, 0, Math.PI * 2);
+    g.fill();
+  });
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   return tex;
 }
 

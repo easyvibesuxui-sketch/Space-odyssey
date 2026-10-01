@@ -8,12 +8,12 @@ export const CONFIG = {
   arenaRadius: 850,
 
   ship: {
-    speed: 46,
-    minSpeed: 18,
-    maxSpeed: 72,
-    boostSpeed: 125,
-    accel: 55,
-    turnRate: 1.9, // rad/s at full stick
+    speed: 38,
+    minSpeed: 15,
+    maxSpeed: 60,
+    boostSpeed: 100,
+    accel: 45,
+    turnRate: 1.6, // rad/s at full stick
     rollRate: 2.6,
     hull: 100,
     shield: 60,
@@ -26,29 +26,30 @@ export const CONFIG = {
   },
 
   laser: {
-    speed: 650,
-    fireInterval: 0.1,
+    speed: 540,
+    fireInterval: 0.12,
     damage: 10,
     life: 1.2,
   },
 
   enemyLaser: {
-    speed: 230,
+    speed: 170,
     life: 3,
   },
 
   enemies: {
-    fighter: { hp: 30, speed: 52, turnRate: 1.7, radius: 4.2, damage: 5, fireInterval: 0.55, range: 230, coins: 3, score: 100 },
-    bomber: { hp: 110, speed: 26, turnRate: 0.8, radius: 8, damage: 4, fireInterval: 1.1, range: 170, coins: 7, score: 250 },
+    fighter: { hp: 30, speed: 40, turnRate: 1.35, radius: 4.2, damage: 5, fireInterval: 0.85, range: 230, coins: 3, score: 100 },
+    bomber: { hp: 110, speed: 20, turnRate: 0.65, radius: 8, damage: 4, fireInterval: 1.5, range: 170, coins: 7, score: 250 },
   },
 
   startCoins: 100,
 
   waves: {
     perLevel: 5,
-    firstBreak: 15,
-    breakTime: 20,
-    spawnDistance: 560,
+    firstBreak: 20,
+    breakTime: 25,
+    spawnDistance: 640,
+    spawnInterval: 0.9,
   },
 
   belt: {

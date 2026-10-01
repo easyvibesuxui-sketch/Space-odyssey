@@ -25,10 +25,15 @@ import { BaseUI } from './ui/BaseUI.js';
 import { Hangar } from './base/Hangar.js';
 import { emptyUpgrades, applyUpgrades } from './systems/Upgrades.js';
 import { loadSave, writeSave } from './core/Save.js';
+import { instantiate } from './core/Models.js';
 
 const AIM_DISTANCE = 500;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
-const CAM_OFFSET = new THREE.Vector3(0, 4.2, 16.5);
+const CAM_OFFSET = new THREE.Vector3(0, 3.8, 14.5);
+// Pilot's eye inside the cockpit model (cockpit space, nose towards -Z).
+const COCKPIT_EYE = new THREE.Vector3(0, 1.58, 2.4);
+const VIEW_KEY = 'space-odyssey-view';
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
 const CAM_TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.06);
 
 export class Game {
@@ -74,8 +79,8 @@ export class Game {
     this.planet = new Planet(this.scene, this.renderer);
     this.asteroids = new Asteroids(this.scene);
     this.dust = new SpaceDust(this.scene);
-    this.ship = new Ship(this.scene);
-    this.enemies = new Enemies(this.scene);
+    this.ship = new Ship(this.scene, assets.models);
+    this.enemies = new Enemies(this.scene, assets.models);
     this.lasers = new Lasers(this.scene);
     this.enemyLasers = new Lasers(this.scene, {
       color: new THREE.Color(8, 1.6, 0.6),
@@ -146,6 +151,21 @@ export class Game {
     this._q = new THREE.Quaternion();
     this._m = new THREE.Matrix4();
 
+    // Cockpit view: the cockpit model rides along with the ship and is shown instead of the hull.
+    if (assets.models?.cockpit) {
+      this.cockpit = instantiate(assets.models.cockpit).root;
+      this.cockpit.visible = false;
+      this.ship.group.add(this.cockpit);
+    }
+    this.cockpitEye = COCKPIT_EYE.clone();
+    this.viewMode = 'chase';
+    try {
+      if (localStorage.getItem(VIEW_KEY) === 'cockpit' && this.cockpit) this.viewMode = 'cockpit';
+    } catch {
+      // Storage unavailable: keep the default view.
+    }
+    this.setView(this.viewMode);
+
     this.build = new BuildMode(this);
     this.hangar = new Hangar(this);
     this.baseUI = new BaseUI(this);
@@ -159,12 +179,14 @@ export class Game {
       if (save) this._fadeThen(() => this.loadGame(save));
     });
     document.getElementById('build-btn').addEventListener('click', () => this.toggleBuild());
+    document.getElementById('view-btn').addEventListener('click', () => this.toggleView());
     this.nextWaveBtn = document.getElementById('next-wave-btn');
     this.nextWaveBtn.addEventListener('click', () => this.callNextWave());
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       if (this.state === 'base') return;
       if (e.code === 'KeyB') this.toggleBuild();
+      else if (e.code === 'KeyV') this.toggleView();
       else if (e.code === 'Escape' && this.build.active) this.build.exit();
       else if (e.code === 'KeyN' || e.code === 'Enter') this.callNextWave();
     });
@@ -284,6 +306,26 @@ export class Game {
     this.bloom.strength = 0.3;
     this.hangar.enter();
     this.baseUI.show(save.cargo ?? null);
+  }
+
+  toggleView() {
+    if (this.state !== 'playing' || !this.cockpit) return;
+    this.setView(this.viewMode === 'chase' ? 'cockpit' : 'chase');
+    try {
+      localStorage.setItem(VIEW_KEY, this.viewMode);
+    } catch {
+      // Not critical.
+    }
+  }
+
+  setView(mode) {
+    this.viewMode = mode;
+    const cockpit = mode === 'cockpit';
+    if (this.cockpit) this.cockpit.visible = cockpit;
+    // Hide the hull (and its engine flames) from the inside.
+    this.ship.model.root.visible = !cockpit;
+    document.body.classList.toggle('cockpit-view', cockpit);
+    this.camQuat.copy(this.ship.group.quaternion);
   }
 
   toggleBuild() {
@@ -749,10 +791,22 @@ export class Game {
   _updateCamera(dt) {
     const cam = this.camera;
     const shipQ = this.ship.group.quaternion;
+    if (this.viewMode === 'cockpit' && this.ship.alive) {
+      // Locked to the ship, with a touch of bank from the visual roll.
+      this.camQuat.copy(shipQ);
+      cam.quaternion.copy(shipQ).multiply(this._q.setFromAxisAngle(Z_AXIS, this.ship.model.roll.rotation.z * 0.35));
+      cam.position.copy(this.cockpitEye).applyQuaternion(shipQ).add(this.ship.group.position);
+      this._applyShakeAndFov(dt);
+      return;
+    }
     this.camQuat.slerp(shipQ, 1 - Math.exp(-5 * dt));
     cam.quaternion.copy(this.camQuat).multiply(CAM_TILT);
     cam.position.copy(CAM_OFFSET).applyQuaternion(this.camQuat).add(this.ship.group.position);
+    this._applyShakeAndFov(dt);
+  }
 
+  _applyShakeAndFov(dt) {
+    const cam = this.camera;
     const s = this.effects.shake;
     if (s > 0) {
       cam.position.x += (Math.random() - 0.5) * s * s * 1.6;

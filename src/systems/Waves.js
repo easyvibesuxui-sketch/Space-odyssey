@@ -52,7 +52,7 @@ export class Waves {
       if (this.spawnTimer <= 0) {
         const next = this.queue.shift();
         this.enemies.spawn(next.type, next.pos, this.level);
-        this.spawnTimer = 0.45;
+        this.spawnTimer = CONFIG.waves.spawnInterval;
       }
       return;
     }

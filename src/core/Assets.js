@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { loadModels } from './Models.js';
 
 // Works both at the site root and under a sub-path (e.g. GitHub Pages /Space-odyssey/).
 const BASE = import.meta.env.BASE_URL;
@@ -26,6 +27,13 @@ export async function loadAssets(onProgress) {
       assets.coin = tex;
     })
   );
+
+  // 3D models (meshopt-compressed GLBs). Failures fall back to the procedural placeholders.
+  const modelsJob = loadModels(track).then((m) => (assets.models = m)).catch((err) => {
+    console.warn('Model loading failed, using placeholders', err);
+    assets.models = {};
+  });
+  jobs.push(modelsJob);
 
   // Warm the browser cache for the menu art / preloader video so they never pop in.
   track(preloadImage(`${BASE}assets/keyart.jpg`));

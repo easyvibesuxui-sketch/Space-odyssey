@@ -1,16 +1,17 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
+import { instantiate } from '../core/Models.js';
 
-// Placeholder starfighter built from primitives. The whole thing lives in `this.model`
-// so it can be swapped for a GLB later without touching gameplay code.
+// The player's starfighter: the COLAID1 GLB when loaded, otherwise a primitive placeholder.
+// Either way the visual lives in `this.model` with the same shape (root/roll/guns/trails/glows).
 //
 // Flight model: arcade 6-DOF. The ship always flies forward (-Z); stick input sets pitch/yaw
 // rates, A/D roll, W/S throttle, boost burns energy. It slowly auto-levels to the planet's
 // equator plane so the player never gets lost upside down.
 export class Ship {
-  constructor(scene) {
+  constructor(scene, models = {}) {
     this.group = new THREE.Group();
-    this.model = buildShipModel();
+    this.model = makePlayerModel(models);
     this.group.add(this.model.root);
     scene.add(this.group);
 
@@ -110,7 +111,7 @@ export class Ship {
     for (let i = 0; i < this.model.trails.length; i++) {
       const flick = 0.9 + Math.sin(time * 40 + i * 1.7) * 0.06 + Math.random() * 0.06;
       this.model.trails[i].scale.set(flick, flick, len * (0.95 + Math.random() * 0.1));
-      this.model.glows[i].scale.setScalar(1.1 * flick * (this.boosting ? 1.5 : 1));
+      this.model.glows[i].scale.setScalar((this.model.glows[i].userData.base ?? 1.1) * flick * (this.boosting ? 1.5 : 1));
     }
 
     this.shieldFlash = Math.max(0, this.shieldFlash - dt * 3);
@@ -140,6 +141,57 @@ export class Ship {
     }
     return false;
   }
+}
+
+export function makePlayerModel(models = {}) {
+  return models.player ? buildShipFromGLB(models.player) : buildShipModel();
+}
+
+// GLB ship + engine flames on its four rear nozzles + two gun muzzles at the nose.
+function buildShipFromGLB(model) {
+  const root = new THREE.Group();
+  const roll = new THREE.Group();
+  root.add(roll);
+  roll.add(instantiate(model).root);
+
+  const { x: W, y: H, z: L } = model.size;
+  const rearZ = L / 2 - 0.25;
+  const glowTex = makeGlowTexture();
+  const trailMat = makeTrailMaterial();
+  const trails = [];
+  const glows = [];
+  for (const [fx, big] of [[-0.21, true], [-0.08, false], [0.08, false], [0.21, true]]) {
+    const x = fx * W;
+    const y = H * 0.04;
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTex,
+      color: new THREE.Color(0.5, 1.1, 2.4),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    glow.position.set(x, y, rearZ + 0.1);
+    glow.userData.base = big ? 1.0 : 0.7;
+    roll.add(glow);
+    glows.push(glow);
+
+    const holder = new THREE.Group();
+    holder.position.set(x, y, rearZ);
+    holder.scale.setScalar(big ? 0.65 : 0.45);
+    const trail = new THREE.Mesh(makeTrailGeometry(), trailMat);
+    holder.add(trail);
+    roll.add(holder);
+    trails.push(trail);
+  }
+
+  const guns = [];
+  for (const s of [-1, 1]) {
+    const muzzle = new THREE.Object3D();
+    muzzle.position.set(s * W * 0.16, -H * 0.15, -L * 0.42);
+    roll.add(muzzle);
+    guns.push(muzzle);
+  }
+  return { root, roll, guns, trails, glows };
 }
 
 export function buildShipModel() {

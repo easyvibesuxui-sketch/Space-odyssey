@@ -2,6 +2,7 @@ import { loadAssets } from './core/Assets.js';
 import { Audio } from './core/Audio.js';
 import { Game } from './Game.js';
 import { loadSave } from './core/Save.js';
+import { CREDITS } from './core/Models.js';
 
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 document.body.classList.toggle('touch', isTouch);
@@ -24,6 +25,13 @@ function animateBar() {
 requestAnimationFrame(animateBar);
 
 const audio = new Audio();
+
+// Credits for third-party 3D models (CC-BY requires attribution).
+document.getElementById('credits-list').innerHTML = CREDITS.map(
+  (c) => `<div class="credit"><b>${c.what}</b> · “${c.title}” by ${c.author} · ${c.license}<br/><a href="${c.url}" target="_blank" rel="noopener">${c.url}</a></div>`
+).join('');
+document.getElementById('credits-btn').addEventListener('click', () => document.getElementById('credits').classList.remove('hidden'));
+document.getElementById('credits-close').addEventListener('click', () => document.getElementById('credits').classList.add('hidden'));
 
 async function boot() {
   const minTime = new Promise((r) => setTimeout(r, 1200));
