@@ -26,6 +26,10 @@ export class Hud {
     this.warningEl = $('warning');
     this.indicatorsEl = $('indicators');
     this.radar = $('radar');
+    this.bossBar = $('boss-bar');
+    this.bossName = $('boss-name');
+    this.bossFill = $('boss-fill');
+    this.bossStatus = $('boss-status');
     this.radarCtx = this.radar.getContext('2d');
     this.arrows = [];
     this.boxes = [];
@@ -70,9 +74,10 @@ export class Hud {
       this.coinBox.classList.add('pop');
     });
 
-    const label = `LEVEL ${waves.level} · WAVE ${Math.max(waves.wave, 1)}/${waves.perLevel}`;
+    const bossFight = waves.state === 'boss';
+    const label = bossFight ? `LEVEL ${waves.level} · BOSS` : `LEVEL ${waves.level} · WAVE ${Math.max(waves.wave, 1)}/${waves.perLevel}`;
     this._set('wave', label, (v) => (this.waveLabel.textContent = v));
-    const sub = waves.state === 'break' ? `NEXT WAVE IN ${Math.ceil(waves.countdown)}` : `ENEMIES ${waves.remaining}`;
+    const sub = waves.state === 'break' ? `NEXT WAVE IN ${Math.ceil(waves.countdown)}` : bossFight ? (waves.remaining ? `ESCORTS ${waves.remaining}` : '') : `ENEMIES ${waves.remaining}`;
     this._set('waveSub', sub, (v) => (this.waveSub.textContent = v));
 
     let warning = '';
@@ -80,6 +85,18 @@ export class Hud {
     else if (game.outOfBounds) warning = 'LEAVING COMBAT ZONE · TURNING BACK';
     else if (game.planetHp <= 30) warning = 'HOMEWORLD CRITICAL';
     this._set('warning', warning, (v) => (this.warningEl.textContent = v));
+
+    const boss = game.bosses.boss;
+    const showBoss = !!boss && boss.alive;
+    this._set('bossShow', showBoss, (v) => this.bossBar.classList.toggle('hidden', !v));
+    if (showBoss) {
+      this._set('bossName', boss.def.name, (v) => {
+        this.bossName.textContent = v;
+        this.bossBar.style.setProperty('--boss', boss.def.color);
+      });
+      this._set('bossHp', Math.ceil((boss.hp / boss.maxHp) * 200) / 2, (v) => (this.bossFill.style.width = `${v}%`));
+      this._set('bossStatus', boss.status, (v) => (this.bossStatus.textContent = v));
+    }
 
     this._drawRadar(game);
     this._updateIndicators(game);
@@ -162,6 +179,14 @@ export class Hud {
       else ctx.fill();
     }
 
+    // Boss.
+    const boss = game.bosses.boss;
+    if (boss && boss.alive && !boss.cloaked) {
+      const [x, y] = toRadar(boss.root.position);
+      ctx.fillStyle = boss.def.color;
+      ctx.fillRect(x - 7, y - 7, 14, 14);
+    }
+
     // Player.
     ctx.fillStyle = '#4fd8ff';
     ctx.beginPath();
@@ -179,7 +204,7 @@ export class Hud {
     let arrowCount = 0;
     let boxCount = 0;
 
-    const place = (pos, kind, hpFrac) => {
+    const place = (pos, kind, hpFrac, onScreenOnly = false) => {
       _v.copy(pos).applyMatrix4(cam.matrixWorldInverse);
       const behind = _v.z > 0;
       _v.copy(pos).project(cam);
@@ -198,6 +223,7 @@ export class Hud {
         b.firstChild.style.width = `${Math.max(hpFrac, 0) * 100}%`;
         return;
       }
+      if (onScreenOnly) return;
       // Clamp to an ellipse near the screen edge and point outward.
       const ang = Math.atan2(y, x);
       const ex = Math.cos(ang) * 0.46 * w;
@@ -211,6 +237,13 @@ export class Hud {
       for (const e of game.enemies.list) {
         if (!e.active) continue;
         place(e.group.position, e.type, e.hp / e.maxHp);
+      }
+      const boss = game.bosses.boss;
+      if (boss && boss.alive && !boss.cloaked) {
+        place(boss.root.position, 'boss', boss.hp / boss.maxHp);
+        for (const t of game.bosses.targets) {
+          if (t.active && t.kind !== 'segment') place(t.group.position, 'part', t.hp / t.maxHp, true);
+        }
       }
       place(new THREE.Vector3(0, 0, 0), 'planet', 1);
     }

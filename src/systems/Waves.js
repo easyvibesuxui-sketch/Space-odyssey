@@ -57,13 +57,23 @@ export class Waves {
       return;
     }
 
+    if (this.state === 'boss') {
+      // The level ends when the boss and everything it launched are gone.
+      if (this.cb.bossAlive?.() || this.enemies.activeCount > 0) return;
+      this.cb.onLevelComplete?.({ level: this.level });
+      this.level++;
+      this.wave = 0;
+      this.timer = CONFIG.waves.breakTime + 4;
+      this.state = 'break';
+      return;
+    }
+
     if (this.enemies.activeCount === 0) {
       const levelDone = this.wave >= this.perLevel;
       if (levelDone) {
-        this.cb.onLevelComplete?.({ level: this.level });
-        this.level++;
-        this.wave = 0;
-        this.timer = CONFIG.waves.breakTime + 4;
+        this.state = 'boss';
+        this.cb.onBossStart?.({ level: this.level });
+        return;
       } else {
         this.cb.onWaveCleared?.({ level: this.level, wave: this.wave });
         this.timer = CONFIG.waves.breakTime;

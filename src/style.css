@@ -745,3 +745,13 @@ body:not(.base-mode) #use-btn { display: none; }
 .credit b { color: var(--cyan); }
 .credit a { color: var(--gold); word-break: break-all; }
 .credits-note { font-size: 0.95rem !important; color: rgba(223, 246, 255, 0.7); }
+
+/* ---------- Boss ---------- */
+#boss-bar { margin-top: 8px; width: min(440px, 80vw); text-align: center; }
+.boss-name { font-size: 0.8rem; letter-spacing: 0.3em; color: var(--boss, #ff4d5e); text-shadow: 0 0 10px currentColor; }
+.boss-track { margin-top: 4px; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 77, 94, 0.4); overflow: hidden; }
+.boss-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #b8231f, var(--boss, #ff4d5e)); box-shadow: 0 0 10px var(--boss, #ff4d5e); transition: width 0.15s; }
+.boss-status { margin-top: 4px; font-family: 'Rajdhani', sans-serif; font-size: 0.9rem; letter-spacing: 0.08em; color: rgba(223, 246, 255, 0.9); }
+.indicator.boss { border-bottom-color: #b98cff; border-left-width: 13px; border-right-width: 13px; border-bottom-width: 26px; filter: drop-shadow(0 0 8px rgba(185, 140, 255, 0.9)); }
+.target-box.boss { width: 70px; height: 70px; margin: -35px 0 0 -35px; border-color: rgba(185, 140, 255, 0.9); border-width: 2px; }
+.target-box.part { width: 22px; height: 22px; margin: -11px 0 0 -11px; border-color: rgba(255, 201, 74, 0.95); border-radius: 50%; }

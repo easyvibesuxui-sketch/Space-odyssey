@@ -13,6 +13,7 @@ import { Asteroids } from './world/Asteroids.js';
 import { SpaceDust } from './world/SpaceDust.js';
 import { Ship } from './entities/Ship.js';
 import { Enemies } from './entities/Enemies.js';
+import { Bosses, BOSS_TYPES } from './entities/Bosses.js';
 import { Lasers, segmentHitsSphere } from './systems/Lasers.js';
 import { Effects } from './systems/Effects.js';
 import { Pickups } from './systems/Pickups.js';
@@ -81,6 +82,8 @@ export class Game {
     this.dust = new SpaceDust(this.scene);
     this.ship = new Ship(this.scene, assets.models);
     this.enemies = new Enemies(this.scene, assets.models);
+    // Everything the player and turrets can shoot at (enemies + boss parts), rebuilt every frame.
+    this.targets = [];
     this.lasers = new Lasers(this.scene);
     this.enemyLasers = new Lasers(this.scene, {
       color: new THREE.Color(8, 1.6, 0.6),
@@ -101,6 +104,7 @@ export class Game {
       length: 4,
     });
     this.missiles = new Missiles(this.scene, this.effects);
+    this.bosses = new Bosses(this.scene, assets.models, this.effects);
     this.hud = new Hud();
     this.waves = new Waves(this.enemies, {
       onWaveStart: ({ wave, fighters, bombers }) => {
@@ -109,6 +113,15 @@ export class Game {
         this.hud.banner(`WAVE ${wave}`, `Incoming: ${parts.join(' · ')}`, { danger: true });
         this.audio.alarm?.();
       },
+      onBossStart: ({ level }) => {
+        const a = Math.random() * Math.PI * 2;
+        const from = new THREE.Vector3(Math.cos(a), 0.15, Math.sin(a)).multiplyScalar(CONFIG.waves.spawnDistance + 80);
+        const boss = this.bosses.spawn(level, from);
+        this.hud.banner(`BOSS · ${boss.def.name}`, boss.def.hint, { danger: true, duration: 4500 });
+        this.audio.alarm();
+        setTimeout(() => this.audio.alarm(), 1200);
+      },
+      bossAlive: () => this.bosses.active,
       onWaveCleared: ({ wave }) => {
         this.hud.banner('WAVE CLEARED', `Wave ${wave} destroyed · press BUILD to place turrets`);
       },
@@ -225,6 +238,7 @@ export class Game {
       for (const c of this.pickups.coins) if (c.active) this.coins += c.value;
       this.pickups.clear();
       this.enemies.clear();
+      this.bosses.clear();
       this.lasers.clear();
       this.enemyLasers.clear();
       this.turretLasers.clear();
@@ -368,6 +382,7 @@ export class Game {
     document.getElementById('game-over').classList.add('hidden');
     this.ship.reset();
     this.enemies.clear();
+    this.bosses.clear();
     this.lasers.clear();
     this.enemyLasers.clear();
     this.pickups.clear();
@@ -438,6 +453,7 @@ export class Game {
 
     this.planet.update(dt);
     this.asteroids.update(dt);
+    this._refreshTargets();
     this.enemies.update(dt, {
       ship: this.ship,
       planetRadius: CONFIG.planet.radius,
@@ -445,14 +461,24 @@ export class Game {
       time: this.time,
     });
     if (this.state !== 'menu') {
-      this.turrets.update(dt, {
+      this.bosses.update(dt, {
+        ship: this.ship,
+        lasers: this.enemyLasers,
         enemies: this.enemies,
+        turrets: this.turrets,
+        time: this.time,
+        audio: this.audio,
+        damagePlanet: (amount, at) => this._damagePlanet(amount, at),
+        banner: (title, sub, opts) => this.hud.banner(title, sub, opts),
+      });
+      this.turrets.update(dt, {
+        targets: this.targets,
         lasers: this.turretLasers,
         missiles: this.missiles,
         time: this.time,
         onFire: (type, slot) => this._turretSound(type, slot),
       });
-      this.missiles.update(dt, this.enemies, (p, damage, splash) => this._missileExplode(p, damage, splash));
+      this.missiles.update(dt, { list: this.targets }, (p, damage, splash) => this._missileExplode(p, damage, splash));
     }
     this.lasers.update(dt);
     this.turretLasers.update(dt);
@@ -540,7 +566,7 @@ export class Game {
 
     // Lasers converge on whatever is under the crosshair; touch gets a wide aim assist.
     const assist = this.isTouch ? 9 : 2;
-    for (const e of this.enemies.list) {
+    for (const e of this.targets) {
       if (!e.active) continue;
       const along = this._v.subVectors(e.group.position, ray.origin).dot(ray.direction);
       if (along < 5 || along > 600) continue;
@@ -587,13 +613,13 @@ export class Game {
     for (const l of this.lasers.list) {
       if (!l.active) continue;
       let hitSomething = false;
-      for (const e of this.enemies.list) {
+      for (const e of this.targets) {
         if (!e.active) continue;
         const hit = segmentHitsSphere(l.prev, l.mesh.position, e.group.position, e.radius);
         if (!hit) continue;
         this.effects.sparks(hit, 10, hot, 22, 0.5, 0.3);
         this._hitSound();
-        if (this.enemies.damage(e, l.damage)) this._onEnemyDestroyed(e);
+        this._hitTarget(e, l.damage, hit);
         hitSomething = true;
         break;
       }
@@ -619,13 +645,13 @@ export class Game {
     // Turret lasers vs enemies (they pass harmlessly through everything else).
     for (const l of this.turretLasers.list) {
       if (!l.active) continue;
-      for (const e of this.enemies.list) {
+      for (const e of this.targets) {
         if (!e.active) continue;
         const hit = segmentHitsSphere(l.prev, l.mesh.position, e.group.position, e.radius);
         if (!hit) continue;
         this.turretLasers.kill(l);
         this.effects.sparks(hit, 6, new THREE.Color(1, 3.5, 3), 16, 0.4, 0.25);
-        if (this.enemies.damage(e, l.damage)) this._onEnemyDestroyed(e);
+        this._hitTarget(e, l.damage, hit);
         break;
       }
     }
@@ -672,6 +698,18 @@ export class Game {
       this.enemies.damage(e, 1e6);
       this._onEnemyDestroyed(e);
       this._damageShip(20, shipPos, true);
+      break;
+    }
+
+    // Ship vs boss hull: solid, hurts, pushes the ship away.
+    for (const t of this.bosses.targets) {
+      if (!t.active || t.kind !== 'segment') continue;
+      const r = t.radius + this.ship.radius;
+      const dsq = t.group.position.distanceToSquared(shipPos);
+      if (dsq > r * r) continue;
+      const n = this._v.subVectors(shipPos, t.group.position).normalize();
+      shipPos.copy(t.group.position).addScaledVector(n, r + 0.5);
+      this._damageShip(18, shipPos, true);
       break;
     }
 
@@ -723,11 +761,60 @@ export class Game {
     this.effects.explosion(p, 3.5, 0);
     const d = p.distanceTo(this.camera.position);
     this.audio.explosion(THREE.MathUtils.clamp(1 - d / 600, 0.2, 0.9));
-    for (const e of this.enemies.list) {
+    for (const e of this.targets) {
       if (!e.active) continue;
       if (e.group.position.distanceTo(p) > splash + e.radius) continue;
-      if (this.enemies.damage(e, damage)) this._onEnemyDestroyed(e);
+      this._hitTarget(e, damage, p);
     }
+  }
+
+  _refreshTargets() {
+    const t = this.targets;
+    t.length = 0;
+    for (const e of this.enemies.list) if (e.active) t.push(e);
+    for (const b of this.bosses.targets) if (b.active) t.push(b);
+  }
+
+  // Route damage to a regular enemy or a boss part.
+  _hitTarget(t, amount, at) {
+    if (!t.active) return;
+    if (!t.boss) {
+      if (this.enemies.damage(t, amount)) this._onEnemyDestroyed(t);
+      return;
+    }
+    const r = this.bosses.damage(t, amount);
+    if (r.absorbed) this.effects.sparks(at, 6, new THREE.Color(0.6, 2, 4), 14, 0.4, 0.2);
+    if (r.partDestroyed) {
+      this.effects.explosion(t.group.position.clone(), 5, 0);
+      this.audio.explosion(1.2);
+      this.pickups.spawnCoins(t.group.position, 3, 1);
+      this.score += 300 * this.waves.level;
+    }
+    if (r.bossDestroyed) this._onBossDestroyed();
+  }
+
+  _onBossDestroyed() {
+    const boss = this.bosses.boss;
+    const level = this.waves.level;
+    this.score += 3000 * level;
+    this.hud.banner(`${boss.def.name} DESTROYED`, `+${3000 * level} score · collect the salvage!`, { duration: 3500 });
+    // A chain of explosions along the hull, then it's gone.
+    const points = this.bosses.hullPoints(10);
+    points.forEach((p, i) =>
+      setTimeout(() => {
+        this.effects.explosion(p, 10 + Math.random() * 8, 0);
+        this.audio.explosion(1.6);
+        this.effects.shake = Math.max(this.effects.shake, 0.6);
+      }, i * 180)
+    );
+    setTimeout(() => {
+      const c = boss.root.position.clone();
+      this.effects.explosion(c, 28, 0);
+      this.audio.explosion(3);
+      this.pickups.spawnCoins(c, 8, 5);
+      this.pickups.spawnCoins(c, 20, 1);
+      this.bosses.clear();
+    }, points.length * 180 + 200);
   }
 
   _damagePlanet(amount, at) {

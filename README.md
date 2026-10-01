@@ -11,7 +11,13 @@ Laser Turret (fast, anti-fighter), Missile Battery (homing, splash) and Shield G
 (reduces planet damage). Turrets upgrade to level 3 and sell for 50%. Calling the next wave
 early (N / NEXT WAVE) pays bonus coins.
 
-After every 5th wave you return to your **home base**: a first-person hangar where you walk
+Every level ends with a **boss** (they rotate and get tougher each cycle):
+**Dreadnought** (hull shielded while its orbiting drones live), **Carrier** (launches fighter
+squadrons; its hangar bays armour the hull), **Siege Breaker** (charges a planet-cracker beam —
+shoot its glowing core during the charge to interrupt and stun it) and **Phantom** (cloaks,
+teleports, and its EMP knocks nearby turrets offline).
+
+After every boss you return to your **home base**: a first-person hangar where you walk
 around, unload the level's cargo (rewards), upgrade your ship at the Ship Systems terminal
 (laser power, fire rate, hull, shield, engines, coin magnet — 5 levels each), repair the
 homeworld, then board your ship to launch the next level. Progress is saved at the base
@@ -45,6 +51,7 @@ npm run build    # production build in dist/
 - `src/config.js` – all tunable gameplay numbers
 - `src/entities/Ship.js` – player ship + flight model (placeholder model, swap for a GLB later)
 - `src/entities/Enemies.js` – enemy fighters/bombers and their AI
+- `src/entities/Bosses.js` – the four bosses, their abilities and weak points
 - `src/world/` – sky/nebula/sun, procedural planet, asteroid belt, space dust
 - `src/systems/` – lasers, missiles, turrets, waves, particles/explosions, coin pickups
 - `src/ui/Hud.js` – HUD, radar, off-screen enemy markers, banners

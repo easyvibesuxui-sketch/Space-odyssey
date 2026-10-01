@@ -117,6 +117,24 @@ export class Turrets {
     return Math.min(r, CONFIG.turrets.types.shield.maxReduction);
   }
 
+  // Disable every turret within radius of center for duration seconds. Returns how many.
+  emp(center, radius, duration) {
+    let n = 0;
+    for (const s of this.slots) {
+      if (!s.turret || s.pos.distanceTo(center) > radius) continue;
+      s.turret.disabled = duration;
+      this._setPowered(s.turret, false);
+      n++;
+    }
+    return n;
+  }
+
+  _setPowered(t, on) {
+    t.model.root.traverse((o) => {
+      if (o.isSprite) o.visible = on;
+    });
+  }
+
   get count() {
     return this.slots.filter((s) => s.turret).length;
   }
@@ -162,6 +180,13 @@ export class Turrets {
       const t = slot.turret;
       if (!t) continue;
       const m = t.model;
+      // Knocked out by an EMP: dark and silent until it reboots.
+      if (t.disabled > 0) {
+        t.disabled -= dt;
+        m.head.rotation.x = Math.sin(ctx.time * 20) * 0.05;
+        if (t.disabled <= 0) this._setPowered(t, true);
+        continue;
+      }
       if (t.type === 'shield') {
         m.core.scale.setScalar(1 + Math.sin(ctx.time * 3 + slot.index) * 0.12);
         continue;
@@ -173,7 +198,7 @@ export class Turrets {
       // Prefer the enemy closest to the planet among those in range with a clear line of sight.
       let best = null;
       let bestScore = Infinity;
-      for (const e of ctx.enemies.list) {
+      for (const e of ctx.targets) {
         if (!e.active) continue;
         const d = e.group.position.distanceTo(slot.pos);
         if (d > stats.range) continue;
