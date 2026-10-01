@@ -27,8 +27,9 @@
         </div>
         <button id="launch-btn" class="launch-btn" disabled>LOADING…</button>
         <div class="controls-hint">
-          <span class="desktop-only"><b>WASD</b> move · <b>Mouse</b> aim · <b>Click</b> fire · <b>Shift</b> dash</span>
-          <span class="touch-only"><b>Left stick</b> move · <b>Drag right</b> aim · <b>FIRE</b> shoot</span>
+          <span class="desktop-only"><b>Mouse</b> steer &amp; aim · <b>Click</b> fire · <b>W/S</b> throttle · <b>A/D</b> roll · <b>Shift</b> boost</span>
+          <span class="touch-only"><b>Stick</b> steer · <b>FIRE</b> shoot · <b>BOOST</b> speed</span>
+          <span class="mission">Enemy fleets are coming for your homeworld. Hold the line.</span>
         </div>
       </div>
     </div>
@@ -45,6 +46,10 @@
           <div class="bar"><div class="bar-fill shield" id="shield-fill"></div></div>
         </div>
         <div class="bar-group">
+          <label>BOOST</label>
+          <div class="bar"><div class="bar-fill boost" id="boost-fill"></div></div>
+        </div>
+        <div class="bar-group planet-group">
           <label>PLANET</label>
           <div class="bar"><div class="bar-fill planet" id="planet-fill"></div></div>
         </div>
@@ -53,9 +58,14 @@
         <div class="coins" id="coins"><img src="/assets/coin.png" alt="" /><span id="coin-count">0</span></div>
         <div class="score">SCORE <span id="score">0</span></div>
       </div>
-      <div class="hud-bottom-left desktop-only">
-        <div class="dash" id="dash-indicator">DASH</div>
+      <div class="hud-top-center">
+        <div class="wave-label" id="wave-label">LEVEL 1</div>
+        <div class="wave-sub" id="wave-sub"></div>
+        <canvas id="radar" width="240" height="240"></canvas>
       </div>
+      <div id="indicators"></div>
+      <div id="banner"><div class="banner-title" id="banner-title"></div><div class="banner-sub" id="banner-sub"></div></div>
+      <div id="warning"></div>
       <div id="crosshair"></div>
       <div id="damage-flash"></div>
     </div>
@@ -64,12 +74,13 @@
     <div id="touch-controls" class="hidden">
       <div id="joystick"><div id="joystick-knob"></div></div>
       <button id="fire-btn">FIRE</button>
-      <button id="dash-btn">DASH</button>
+      <button id="boost-btn">BOOST</button>
     </div>
 
     <!-- Game over -->
     <div id="game-over" class="overlay hidden">
-      <h2>SHIP DESTROYED</h2>
+      <h2>PLANET LOST</h2>
+      <p>Reached level <span id="final-level">1</span> · wave <span id="final-wave">1</span></p>
       <p>Score <span id="final-score">0</span> · Coins <span id="final-coins">0</span></p>
       <button id="restart-btn" class="launch-btn">RELAUNCH</button>
     </div>

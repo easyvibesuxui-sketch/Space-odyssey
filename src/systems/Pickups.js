@@ -50,8 +50,8 @@ export class Pickups {
     }
   }
 
-  // Moves coins, pulls them to the ship, returns collected value.
-  update(dt, flow, shipPos, time) {
+  // Moves coins, pulls nearby ones into the ship, returns collected value.
+  update(dt, shipPos, time, canCollect = true) {
     let collected = 0;
     const { magnetRadius, collectRadius } = CONFIG.coins;
     const toShip = new THREE.Vector3();
@@ -62,35 +62,33 @@ export class Pickups {
 
       toShip.subVectors(shipPos, p);
       const dist = toShip.length();
-      // Magnet zone: close in XY and within a window just ahead of the ship.
-      const xy = Math.hypot(toShip.x, toShip.y);
-      if (!c.homing && xy < magnetRadius && toShip.z > -70 && toShip.z < 6) c.homing = true;
+      if (canCollect && !c.homing && dist < magnetRadius) c.homing = true;
 
-      if (c.homing) {
-        // Locked on: fly straight into the ship, accelerating.
-        const speed = Math.max(c.vel.length(), 50) + 120 * dt;
+      if (c.homing && canCollect) {
+        // Locked on: fly straight into the ship, accelerating (faster than the ship can fly).
+        const speed = Math.max(c.vel.length(), 60) + 260 * dt;
         c.vel.copy(toShip).normalize().multiplyScalar(speed);
-        p.addScaledVector(c.vel, dt);
       } else {
-        c.vel.multiplyScalar(Math.exp(-2 * dt));
-        p.addScaledVector(c.vel, dt);
-        p.z += flow * 0.9 * dt;
+        c.vel.multiplyScalar(Math.exp(-1.5 * dt));
       }
+      p.addScaledVector(c.vel, dt);
 
       const spin = Math.abs(Math.cos(time * 4 + c.phase));
       c.sprite.scale.set(c.size * Math.max(spin, 0.12), c.size, 1);
 
-      if (dist < collectRadius || (c.homing && toShip.lengthSq() < collectRadius * collectRadius)) {
+      if (canCollect && dist < collectRadius) {
         collected += c.value;
         c.active = false;
         c.sprite.visible = false;
         continue;
       }
-      if (!c.homing && (c.life <= 0 || p.z > CONFIG.despawnZ)) {
+      if (!c.homing && c.life <= 0) {
         c.active = false;
         c.sprite.visible = false;
-      } else if (c.life < 2) {
+      } else if (!c.homing && c.life < 3) {
         c.sprite.visible = Math.floor(c.life * 10) % 2 === 0;
+      } else {
+        c.sprite.visible = true;
       }
     }
     return collected;

@@ -3,6 +3,10 @@ import { CONFIG } from '../config.js';
 
 // Placeholder starfighter built from primitives. The whole thing lives in `this.model`
 // so it can be swapped for a GLB later without touching gameplay code.
+//
+// Flight model: arcade 6-DOF. The ship always flies forward (-Z); stick input sets pitch/yaw
+// rates, A/D roll, W/S throttle, boost burns energy. It slowly auto-levels to the planet's
+// equator plane so the player never gets lost upside down.
 export class Ship {
   constructor(scene) {
     this.group = new THREE.Group();
@@ -11,121 +15,102 @@ export class Ship {
     scene.add(this.group);
 
     this.velocity = new THREE.Vector3();
-    this.hull = CONFIG.ship.hull;
-    this.shield = CONFIG.ship.shield;
-    this.sinceHit = 99;
-    this.dashTimer = 0;
-    this.dashCooldown = 0;
-    this.dashDir = new THREE.Vector2();
-    this.rollExtra = 0;
-    this.invulnerable = 0;
-    this.gunIndex = 0;
+    this.speed = CONFIG.ship.speed;
+    this.angVel = new THREE.Vector3();
     this.radius = 2.4;
-    this.alive = true;
+    this.gunIndex = 0;
 
     this.shieldMesh = makeShieldBubble();
     this.group.add(this.shieldMesh);
     this.shieldFlash = 0;
 
-    this._tmp = new THREE.Vector3();
     this._q = new THREE.Quaternion();
-    this._m = new THREE.Matrix4();
+    this._e = new THREE.Euler();
+    this._v = new THREE.Vector3();
+    this.reset();
   }
 
   reset() {
-    this.group.position.set(0, 0, 0);
+    // Start where the planet is half-lit and the sun is just off to the side.
+    this.group.position.set(284, 45, 142);
+    this.group.lookAt(0, 0, 0);
+    this.group.rotateY(Math.PI); // model faces -Z, lookAt points +Z
     this.velocity.set(0, 0, 0);
+    this.angVel.set(0, 0, 0);
+    this.speed = CONFIG.ship.speed;
     this.hull = CONFIG.ship.hull;
     this.shield = CONFIG.ship.shield;
+    this.boost = CONFIG.ship.boostMax;
+    this.boosting = false;
     this.sinceHit = 99;
-    this.dashTimer = 0;
-    this.dashCooldown = 0;
-    this.invulnerable = 0;
+    this.invulnerable = 2;
     this.alive = true;
     this.group.visible = true;
   }
 
-  get dashReady() {
-    return this.dashCooldown <= 0;
+  get forward() {
+    return this._v.set(0, 0, -1).applyQuaternion(this.group.quaternion);
   }
 
-  tryDash(move) {
-    if (!this.dashReady) return false;
-    const dir = new THREE.Vector2(move.x, move.y);
-    if (dir.lengthSq() < 0.01) dir.set(this.velocity.x >= 0 ? 1 : -1, 0);
-    dir.normalize();
-    this.dashDir.copy(dir);
-    this.dashTimer = CONFIG.ship.dashTime;
-    this.dashCooldown = CONFIG.ship.dashCooldown;
-    this.invulnerable = CONFIG.ship.dashTime + 0.1;
-    // Barrel roll in the direction of the dash.
-    this.rollExtra = (dir.x >= 0 ? -1 : 1) * Math.PI * 2;
-    return true;
-  }
-
-  update(dt, move, aimPoint, time) {
+  // controls: { pitch, yaw, roll, throttle, boost } with axes in [-1, 1]
+  update(dt, controls, time) {
     const cfg = CONFIG.ship;
-    const p = this.group.position;
-    const v = this.velocity;
+    const g = this.group;
 
-    if (this.dashTimer > 0) {
-      this.dashTimer -= dt;
-      v.x = this.dashDir.x * cfg.dashSpeed;
-      v.y = this.dashDir.y * cfg.dashSpeed;
-    } else {
-      v.x += move.x * cfg.accel * dt;
-      v.y += move.y * cfg.accel * dt;
-      const damp = Math.exp(-cfg.damping * dt);
-      if (Math.abs(move.x) < 0.05) v.x *= damp;
-      if (Math.abs(move.y) < 0.05) v.y *= damp;
-      const sp = Math.hypot(v.x, v.y);
-      if (sp > cfg.maxSpeed) {
-        v.x *= cfg.maxSpeed / sp;
-        v.y *= cfg.maxSpeed / sp;
+    // Smooth angular velocity towards the stick for a weighty feel.
+    const k = 1 - Math.exp(-7 * dt);
+    this.angVel.x += (controls.pitch * cfg.turnRate - this.angVel.x) * k;
+    this.angVel.y += (controls.yaw * cfg.turnRate - this.angVel.y) * k;
+    this.angVel.z += (controls.roll * cfg.rollRate - this.angVel.z) * k;
+
+    this._e.set(this.angVel.x * dt, -this.angVel.y * dt, this.angVel.z * dt, 'YXZ');
+    this._q.setFromEuler(this._e);
+    g.quaternion.multiply(this._q);
+
+    // Auto-level: roll so the wings stay parallel to the world horizon when not rolling.
+    if (Math.abs(controls.roll) < 0.1) {
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(g.quaternion);
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(g.quaternion);
+      if (Math.abs(fwd.y) < 0.85) {
+        const tilt = right.y; // >0 => right wing up
+        this._q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -tilt * 1.6 * dt);
+        g.quaternion.multiply(this._q);
       }
     }
-    this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+    g.quaternion.normalize();
+
+    // Throttle and boost.
+    this.boosting = controls.boost && this.boost > 0;
+    let target = cfg.speed + controls.throttle * (controls.throttle > 0 ? cfg.maxSpeed - cfg.speed : cfg.speed - cfg.minSpeed);
+    if (this.boosting) {
+      target = cfg.boostSpeed;
+      this.boost = Math.max(0, this.boost - cfg.boostDrain * dt);
+    } else {
+      this.boost = Math.min(cfg.boostMax, this.boost + cfg.boostRegen * dt);
+    }
+    this.speed += (target - this.speed) * (1 - Math.exp(-2.5 * dt));
+
+    this.velocity.copy(this.forward).multiplyScalar(this.speed);
+    g.position.addScaledVector(this.velocity, dt);
+
+    // Visual banking into turns (model only, doesn't affect flight).
+    const roll = this.model.roll;
+    roll.rotation.z += (-this.angVel.y * 0.35 - roll.rotation.z) * (1 - Math.exp(-6 * dt));
+    roll.rotation.x += (this.angVel.x * 0.06 - roll.rotation.x) * (1 - Math.exp(-6 * dt));
+
     this.invulnerable = Math.max(0, this.invulnerable - dt);
-
-    p.x += v.x * dt;
-    p.y += v.y * dt;
-    const { x: bx, y: by } = CONFIG.bounds;
-    if (Math.abs(p.x) > bx) {
-      p.x = Math.sign(p.x) * bx;
-      v.x *= -0.2;
-    }
-    if (Math.abs(p.y) > by) {
-      p.y = Math.sign(p.y) * by;
-      v.y *= -0.2;
-    }
-
-    // Face the aim point (partially), then bank with lateral velocity.
-    this._m.lookAt(p, aimPoint, THREE.Object3D.DEFAULT_UP);
-    this._q.setFromRotationMatrix(this._m);
-    const ident = new THREE.Quaternion();
-    this._q.slerp(ident, 0.45);
-    this.group.quaternion.slerp(this._q, 1 - Math.exp(-10 * dt));
-
-    const bank = -v.x * 0.022;
-    this.rollExtra *= Math.exp(-7 * dt);
-    const pitch = v.y * 0.008;
-    this.model.root.rotation.z = THREE.MathUtils.lerp(this.model.root.rotation.z, bank, 1 - Math.exp(-8 * dt));
-    this.model.roll.rotation.z = this.rollExtra;
-    this.model.root.rotation.x = THREE.MathUtils.lerp(this.model.root.rotation.x, pitch, 1 - Math.exp(-8 * dt));
-
-    // Shields regenerate after a short delay.
     this.sinceHit += dt;
     if (this.sinceHit > cfg.shieldRegenDelay) {
       this.shield = Math.min(cfg.shield, this.shield + cfg.shieldRegenRate * dt);
     }
 
-    // Engines: flicker + longer trails while dashing.
-    const boost = this.dashTimer > 0 ? 2.2 : 1 + Math.max(0, -move.y) * 0.1;
+    // Engines: trail length follows speed.
+    const thrust = THREE.MathUtils.clamp((this.speed - cfg.minSpeed) / (cfg.boostSpeed - cfg.minSpeed), 0, 1);
+    const len = 0.35 + thrust * 1.5;
     for (let i = 0; i < this.model.trails.length; i++) {
-      const tr = this.model.trails[i];
       const flick = 0.9 + Math.sin(time * 40 + i * 1.7) * 0.06 + Math.random() * 0.06;
-      tr.scale.set(flick, flick, boost * (0.95 + Math.random() * 0.1));
-      this.model.glows[i].scale.setScalar(1.1 * flick * (boost > 1.5 ? 1.4 : 1));
+      this.model.trails[i].scale.set(flick, flick, len * (0.95 + Math.random() * 0.1));
+      this.model.glows[i].scale.setScalar(1.1 * flick * (this.boosting ? 1.5 : 1));
     }
 
     this.shieldFlash = Math.max(0, this.shieldFlash - dt * 3);
@@ -135,9 +120,9 @@ export class Ship {
 
   // Returns muzzle world position (alternates between the two guns).
   nextMuzzle(out) {
-    const g = this.model.guns[this.gunIndex];
+    const gun = this.model.guns[this.gunIndex];
     this.gunIndex = (this.gunIndex + 1) % this.model.guns.length;
-    return g.getWorldPosition(out);
+    return gun.getWorldPosition(out);
   }
 
   // Returns true if the ship was destroyed.
@@ -148,7 +133,6 @@ export class Ship {
     this.shield -= absorbed;
     this.hull -= amount - absorbed;
     if (absorbed > 0) this.shieldFlash = 1;
-    this.invulnerable = 0.25;
     if (this.hull <= 0) {
       this.hull = 0;
       this.alive = false;
@@ -169,7 +153,7 @@ function buildShipModel() {
   const accentMat = new THREE.MeshStandardMaterial({ color: 0xd7cf9c, metalness: 0.35, roughness: 0.5 });
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x0c1a2a, metalness: 0.9, roughness: 0.15, emissive: 0x0a2a48 });
   const lightMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 1.7, 2.2) });
-  const engineGlowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 1.6, 4) });
+  const engineGlowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.8, 2.0) });
 
   const extrudeTop = (pts, depth, mat, bevel = 0.08) => {
     const shape = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
@@ -267,7 +251,7 @@ function buildShipModel() {
 
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTex,
-      color: new THREE.Color(0.9, 1.8, 3.6),
+      color: new THREE.Color(0.5, 1.1, 2.4),
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,

@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 
 export class Lasers {
-  constructor(scene, color = new THREE.Color(1.2, 3.2, 8), pool = 90) {
-    const geo = new THREE.BoxGeometry(0.16, 0.16, 5);
-    const coreMat = new THREE.MeshBasicMaterial({ color });
+  constructor(scene, { color = new THREE.Color(1.2, 3.2, 8), speed = CONFIG.laser.speed, life = CONFIG.laser.life, pool = 90, thickness = 0.16, length = 5 } = {}) {
+    const geo = new THREE.BoxGeometry(thickness, thickness, length);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    this.speed = speed;
+    this.life = life;
     this.list = [];
     for (let i = 0; i < pool; i++) {
-      const mesh = new THREE.Mesh(geo, coreMat);
+      const mesh = new THREE.Mesh(geo, mat);
       mesh.visible = false;
       scene.add(mesh);
       this.list.push({
@@ -15,18 +17,18 @@ export class Lasers {
         dir: new THREE.Vector3(),
         prev: new THREE.Vector3(),
         life: 0,
-        damage: CONFIG.laser.damage,
+        damage: 0,
         active: false,
       });
     }
     this.cursor = 0;
   }
 
-  fire(from, to, damage = CONFIG.laser.damage) {
+  fire(from, to, damage) {
     const l = this.list[this.cursor];
     this.cursor = (this.cursor + 1) % this.list.length;
     l.active = true;
-    l.life = CONFIG.laser.life;
+    l.life = this.life;
     l.damage = damage;
     l.dir.subVectors(to, from).normalize();
     l.mesh.position.copy(from);
@@ -41,12 +43,15 @@ export class Lasers {
     l.mesh.visible = false;
   }
 
+  clear() {
+    for (const l of this.list) this.kill(l);
+  }
+
   update(dt) {
-    const speed = CONFIG.laser.speed;
     for (const l of this.list) {
       if (!l.active) continue;
       l.prev.copy(l.mesh.position);
-      l.mesh.position.addScaledVector(l.dir, speed * dt);
+      l.mesh.position.addScaledVector(l.dir, this.speed * dt);
       l.life -= dt;
       if (l.life <= 0) this.kill(l);
     }

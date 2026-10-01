@@ -122,6 +122,27 @@ export class Audio {
     src.stop(t + 0.3);
   }
 
+  // Two-tone klaxon when a wave starts.
+  alarm() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      const start = t + i * 0.36;
+      osc.frequency.setValueAtTime(440, start);
+      osc.frequency.linearRampToValueAtTime(660, start + 0.18);
+      this._env(gain, start, 0.02, 0.09, 0.3);
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 1800;
+      osc.connect(filter).connect(gain).connect(this.master);
+      osc.start(start);
+      osc.stop(start + 0.34);
+    }
+  }
+
   damage() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

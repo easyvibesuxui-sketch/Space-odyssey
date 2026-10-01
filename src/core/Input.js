@@ -1,18 +1,28 @@
-// Unified input for keyboard + mouse and touch.
-// Exposes: move {x, y} in [-1, 1], aim {x, y} in normalized screen coords, fire, dashPressed.
+// Unified flight input for keyboard + mouse and touch.
+//
+// Desktop: the mouse cursor is both the crosshair and a virtual stick — the further it is from
+// the ship's heading, the harder the ship turns towards it. W/S throttle, A/D roll,
+// arrows pitch/yaw, Shift boost, click/Space fire.
+// Touch: left stick pitch/yaw, FIRE and BOOST buttons; aiming uses aim assist.
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
     this.keys = new Set();
-    this.move = { x: 0, y: 0 };
-    this.aim = { x: 0, y: 0.2 };
-    this.mouseDown = false;
-    this.touchFire = false;
-    this.dashQueued = false;
     this.isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
+    // Crosshair in normalized device coords (desktop only; touch aims along the nose).
+    this.aim = { x: 0, y: 0.13 };
+    this.mouseActive = false;
+    this.mouseDown = false;
+
+    this.touchFire = false;
+    this.touchBoost = false;
     this.joy = { id: null, cx: 0, cy: 0, x: 0, y: 0 };
-    this.aimTouch = { id: null, lastX: 0, lastY: 0 };
+
+    // Outputs, refreshed by update().
+    this.keySteer = { x: 0, y: 0 };
+    this.throttle = 0;
+    this.roll = 0;
 
     this._bindKeyboard();
     this._bindMouse();
@@ -23,38 +33,32 @@ export class Input {
     return this.mouseDown || this.touchFire || this.keys.has('Space');
   }
 
-  consumeDash() {
-    const d = this.dashQueued;
-    this.dashQueued = false;
-    return d;
+  get boost() {
+    return this.touchBoost || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
   }
 
   update() {
-    let x = 0;
-    let y = 0;
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) x -= 1;
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) x += 1;
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) y += 1;
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) y -= 1;
+    const k = this.keys;
+    let sx = 0;
+    let sy = 0;
+    if (k.has('ArrowLeft')) sx -= 1;
+    if (k.has('ArrowRight')) sx += 1;
+    if (k.has('ArrowUp')) sy += 1;
+    if (k.has('ArrowDown')) sy -= 1;
     if (this.joy.id !== null) {
-      x = this.joy.x;
-      y = this.joy.y;
+      sx = this.joy.x;
+      sy = this.joy.y;
     }
-    const len = Math.hypot(x, y);
-    if (len > 1) {
-      x /= len;
-      y /= len;
-    }
-    this.move.x = x;
-    this.move.y = y;
+    this.keySteer.x = sx;
+    this.keySteer.y = sy;
+
+    this.throttle = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
+    this.roll = (k.has('KeyA') ? 1 : 0) - (k.has('KeyD') ? 1 : 0);
   }
 
   _bindKeyboard() {
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
-        if (!e.repeat) this.dashQueued = true;
-      }
-      if (e.code === 'Space') e.preventDefault();
+      if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
       this.keys.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -67,6 +71,7 @@ export class Input {
   _bindMouse() {
     window.addEventListener('mousemove', (e) => {
       if (this.isTouch) return;
+      this.mouseActive = true;
       this.aim.x = (e.clientX / window.innerWidth) * 2 - 1;
       this.aim.y = -(e.clientY / window.innerHeight) * 2 + 1;
     });
@@ -76,6 +81,10 @@ export class Input {
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouseDown = false;
     });
+    // If the cursor leaves the window, stop steering so the ship doesn't spin forever.
+    document.addEventListener('mouseleave', () => {
+      this.mouseActive = false;
+    });
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -83,7 +92,7 @@ export class Input {
     const joystick = document.getElementById('joystick');
     const knob = document.getElementById('joystick-knob');
     const fireBtn = document.getElementById('fire-btn');
-    const dashBtn = document.getElementById('dash-btn');
+    const boostBtn = document.getElementById('boost-btn');
     const radius = 50;
 
     const setKnob = (dx, dy) => {
@@ -100,50 +109,27 @@ export class Input {
       this._updateJoy(t, radius, setKnob);
     }, { passive: false });
 
-    fireBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.touchFire = true;
-      fireBtn.classList.add('active');
-    }, { passive: false });
-    const fireEnd = (e) => {
-      e.preventDefault();
-      this.touchFire = false;
-      fireBtn.classList.remove('active');
+    const hold = (btn, prop) => {
+      const on = (e) => {
+        e.preventDefault();
+        this[prop] = true;
+        btn.classList.add('active');
+      };
+      const off = (e) => {
+        e.preventDefault();
+        this[prop] = false;
+        btn.classList.remove('active');
+      };
+      btn.addEventListener('touchstart', on, { passive: false });
+      btn.addEventListener('touchend', off, { passive: false });
+      btn.addEventListener('touchcancel', off, { passive: false });
     };
-    fireBtn.addEventListener('touchend', fireEnd, { passive: false });
-    fireBtn.addEventListener('touchcancel', fireEnd, { passive: false });
-
-    dashBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.dashQueued = true;
-      dashBtn.classList.add('active');
-    }, { passive: false });
-    dashBtn.addEventListener('touchend', () => dashBtn.classList.remove('active'));
-
-    // Drag anywhere on the canvas to steer the crosshair (relative movement).
-    this.canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      for (const t of e.changedTouches) {
-        if (this.aimTouch.id === null) {
-          this.aimTouch.id = t.identifier;
-          this.aimTouch.lastX = t.clientX;
-          this.aimTouch.lastY = t.clientY;
-        }
-      }
-    }, { passive: false });
+    hold(fireBtn, 'touchFire');
+    hold(boostBtn, 'touchBoost');
 
     window.addEventListener('touchmove', (e) => {
       for (const t of e.changedTouches) {
         if (t.identifier === this.joy.id) this._updateJoy(t, radius, setKnob);
-        if (t.identifier === this.aimTouch.id) {
-          const sens = 2.4;
-          this.aim.x += ((t.clientX - this.aimTouch.lastX) / window.innerWidth) * sens;
-          this.aim.y -= ((t.clientY - this.aimTouch.lastY) / window.innerHeight) * sens;
-          this.aim.x = Math.max(-0.95, Math.min(0.95, this.aim.x));
-          this.aim.y = Math.max(-0.9, Math.min(0.95, this.aim.y));
-          this.aimTouch.lastX = t.clientX;
-          this.aimTouch.lastY = t.clientY;
-        }
       }
     }, { passive: false });
 
@@ -155,11 +141,11 @@ export class Input {
           this.joy.y = 0;
           setKnob(0, 0);
         }
-        if (t.identifier === this.aimTouch.id) this.aimTouch.id = null;
       }
     };
     window.addEventListener('touchend', end);
     window.addEventListener('touchcancel', end);
+    this.canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
   }
 
   _updateJoy(t, radius, setKnob) {

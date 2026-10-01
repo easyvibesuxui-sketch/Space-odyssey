@@ -60,123 +60,91 @@ export class Asteroids {
       emissive: 0x000000,
     });
 
+    // Destructible rocks orbiting inside the belt.
     this.list = [];
-    const poolSize = CONFIG.asteroids.count + 30;
-    for (let i = 0; i < poolSize; i++) {
+    for (let i = 0; i < CONFIG.belt.count; i++) {
       const mesh = new THREE.Mesh(this.smallGeos[0], this.baseMaterial.clone());
-      mesh.visible = false;
       scene.add(mesh);
-      this.list.push({
+      const a = {
         mesh,
         radius: 1,
         hp: 1,
         maxHp: 1,
         spin: new THREE.Vector3(),
-        drift: new THREE.Vector3(),
-        active: false,
-        fragment: false,
+        orbitR: 0,
+        angle: 0,
+        height: 0,
+        omega: 0,
+        active: true,
         flash: 0,
-      });
+      };
+      this._spawn(a, rand(0, Math.PI * 2));
+      this.list.push(a);
     }
 
-    // Spread the initial field over the full depth so it isn't empty at start.
-    for (let i = 0; i < CONFIG.asteroids.count; i++) {
-      this._spawn(this.list[i], rand(CONFIG.spawnZ, -60), false);
-    }
-
-    this._buildBackgroundField();
+    this._buildDecorativeBelt();
   }
 
-  _spawn(a, z, fragment, size) {
-    const { minSize, maxSize, spreadX, spreadY } = CONFIG.asteroids;
-    const s = size ?? minSize + (maxSize - minSize) * Math.pow(Math.random(), 2.3);
+  _spawn(a, angle) {
+    const { inner, outer, thickness, minSize, maxSize } = CONFIG.belt;
+    const s = minSize + (maxSize - minSize) * Math.pow(Math.random(), 2);
     a.radius = s;
-    a.maxHp = a.hp = Math.ceil(s * s * 1.2 + 8);
-    a.fragment = fragment;
-    a.active = true;
+    a.maxHp = a.hp = Math.ceil(s * s * 1.1 + 10);
     a.flash = 0;
+    a.orbitR = rand(inner, outer);
+    a.angle = angle;
+    a.height = rand(-thickness, thickness) * 0.6;
+    // Kepler-ish: inner rocks orbit faster.
+    a.omega = 1.6 / Math.sqrt(a.orbitR);
     const geos = s > 6 ? this.bigGeos : this.smallGeos;
     a.mesh.geometry = geos[Math.floor(Math.random() * geos.length)];
     a.mesh.scale.setScalar(s);
     a.mesh.rotation.set(rand(0, 6.28), rand(0, 6.28), rand(0, 6.28));
-    a.mesh.visible = true;
-    if (!fragment) {
-      a.mesh.position.set(rand(-spreadX, spreadX), rand(-spreadY, spreadY), z);
-    }
-    a.spin.set(rand(-0.5, 0.5), rand(-0.5, 0.5), rand(-0.5, 0.5)).multiplyScalar(2.2 / Math.sqrt(s));
-    a.drift.set(rand(-1.5, 1.5), rand(-1, 1), rand(-3, 6));
+    a.spin.set(rand(-0.5, 0.5), rand(-0.5, 0.5), rand(-0.5, 0.5)).multiplyScalar(1.6 / Math.sqrt(s));
+    this._place(a);
   }
 
-  _buildBackgroundField() {
-    const count = 260;
+  _place(a) {
+    a.mesh.position.set(Math.cos(a.angle) * a.orbitR, a.height, Math.sin(a.angle) * a.orbitR);
+  }
+
+  _buildDecorativeBelt() {
+    const count = 700;
     const geo = makeRockGeometry(500, 2);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x555a63, roughness: 0.95, vertexColors: true });
-    this.bg = new THREE.InstancedMesh(geo, mat, count);
-    this.bgData = [];
+    const mat = new THREE.MeshStandardMaterial({ color: 0x595e68, roughness: 0.95, vertexColors: true });
+    this.belt = new THREE.InstancedMesh(geo, mat, count);
     const dummy = new THREE.Object3D();
+    const { inner, outer, thickness } = CONFIG.belt;
     for (let i = 0; i < count; i++) {
-      // Keep them outside the play lane so they're pure scenery.
-      const angle = rand(0, Math.PI * 2);
-      const dist = rand(230, 750);
-      const d = {
-        pos: new THREE.Vector3(Math.cos(angle) * dist, Math.sin(angle) * dist * 0.55, rand(-1400, 100)),
-        rot: new THREE.Euler(rand(0, 6), rand(0, 6), rand(0, 6)),
-        spin: rand(-0.2, 0.2),
-        scale: 6 + Math.pow(Math.random(), 2) * 40,
-      };
-      this.bgData.push(d);
-      dummy.position.copy(d.pos);
-      dummy.rotation.copy(d.rot);
-      dummy.scale.setScalar(d.scale);
+      const ang = rand(0, Math.PI * 2);
+      // Denser in the middle of the belt.
+      const t = (Math.random() + Math.random()) / 2;
+      const r = inner - 20 + (outer - inner + 40) * t;
+      dummy.position.set(Math.cos(ang) * r, rand(-thickness, thickness) * (1 - Math.abs(t - 0.5)), Math.sin(ang) * r);
+      dummy.rotation.set(rand(0, 6), rand(0, 6), rand(0, 6));
+      dummy.scale.setScalar(0.6 + Math.pow(Math.random(), 3) * 4.5);
       dummy.updateMatrix();
-      this.bg.setMatrixAt(i, dummy.matrix);
+      this.belt.setMatrixAt(i, dummy.matrix);
     }
-    this.bg.frustumCulled = false;
-    this.scene.add(this.bg);
-    this._dummy = dummy;
+    this.belt.computeBoundingSphere();
+    this.scene.add(this.belt);
   }
 
-  update(dt, flow) {
+  update(dt) {
     for (const a of this.list) {
       if (!a.active) continue;
+      a.angle += a.omega * dt * 0.1;
+      this._place(a);
       const m = a.mesh;
-      m.position.x += a.drift.x * dt;
-      m.position.y += a.drift.y * dt;
-      m.position.z += (flow + a.drift.z) * dt;
       m.rotation.x += a.spin.x * dt;
       m.rotation.y += a.spin.y * dt;
       m.rotation.z += a.spin.z * dt;
-
       if (a.flash > 0) {
         a.flash = Math.max(0, a.flash - dt * 6);
         m.material.emissive.setRGB(a.flash * 0.45, a.flash * 0.28, a.flash * 0.12);
       }
-
-      if (m.position.z - a.radius > CONFIG.despawnZ) this._recycle(a);
     }
-
-    const dummy = this._dummy;
-    for (let i = 0; i < this.bgData.length; i++) {
-      const d = this.bgData[i];
-      d.pos.z += flow * dt;
-      if (d.pos.z > 150) d.pos.z -= 1550;
-      d.rot.y += d.spin * dt;
-      dummy.position.copy(d.pos);
-      dummy.rotation.copy(d.rot);
-      dummy.scale.setScalar(d.scale);
-      dummy.updateMatrix();
-      this.bg.setMatrixAt(i, dummy.matrix);
-    }
-    this.bg.instanceMatrix.needsUpdate = true;
-  }
-
-  _recycle(a) {
-    if (a.fragment) {
-      a.active = false;
-      a.mesh.visible = false;
-    } else {
-      this._spawn(a, CONFIG.spawnZ + rand(-80, 0), false);
-    }
+    this.belt.rotation.y += dt * 0.006;
   }
 
   // Apply damage. Returns { position, radius } if the asteroid was destroyed, otherwise null.
@@ -184,22 +152,9 @@ export class Asteroids {
     a.hp -= amount;
     a.flash = 1;
     if (a.hp > 0) return null;
-
-    const pos = a.mesh.position.clone();
-    const r = a.radius;
-    this._recycle(a);
-
-    // Big rocks crumble into smaller chunks.
-    if (r > 5.5) {
-      const pieces = r > 9 ? 3 : 2;
-      for (let i = 0; i < pieces; i++) {
-        const f = this.list.find((x) => !x.active);
-        if (!f) break;
-        this._spawn(f, 0, true, r * rand(0.35, 0.5));
-        f.mesh.position.copy(pos).add(new THREE.Vector3().randomDirection().multiplyScalar(r * 0.5));
-        f.drift.set(rand(-8, 8), rand(-6, 6), rand(-4, 8));
-      }
-    }
-    return { position: pos, radius: r };
+    const result = { position: a.mesh.position.clone(), radius: a.radius };
+    // Respawn on the far side of the belt so rocks don't pop in front of the player.
+    this._spawn(a, a.angle + Math.PI + rand(-1, 1));
+    return result;
   }
 }
