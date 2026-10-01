@@ -17,7 +17,10 @@ import { Lasers, segmentHitsSphere } from './systems/Lasers.js';
 import { Effects } from './systems/Effects.js';
 import { Pickups } from './systems/Pickups.js';
 import { Waves } from './systems/Waves.js';
+import { Turrets } from './systems/Turrets.js';
+import { Missiles } from './systems/Missiles.js';
 import { Hud } from './ui/Hud.js';
+import { BuildMode } from './ui/BuildMode.js';
 
 const AIM_DISTANCE = 500;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
@@ -63,7 +66,7 @@ export class Game {
     this.composer.addPass(new OutputPass());
 
     this.sky = new Sky(this.scene);
-    this.planet = new Planet(this.scene);
+    this.planet = new Planet(this.scene, this.renderer);
     this.asteroids = new Asteroids(this.scene);
     this.dust = new SpaceDust(this.scene);
     this.ship = new Ship(this.scene);
@@ -80,6 +83,14 @@ export class Game {
     this.effects = new Effects(this.scene);
     this.effects.onResize(this.pixelRatio);
     this.pickups = new Pickups(this.scene, assets.coin);
+    this.turrets = new Turrets(this.scene);
+    this.turretLasers = new Lasers(this.scene, {
+      color: new THREE.Color(0.6, 3.6, 3.0),
+      pool: 90,
+      thickness: 0.24,
+      length: 4,
+    });
+    this.missiles = new Missiles(this.scene, this.effects);
     this.hud = new Hud();
     this.waves = new Waves(this.enemies, {
       onWaveStart: ({ wave, fighters, bombers }) => {
@@ -89,7 +100,7 @@ export class Game {
         this.audio.alarm?.();
       },
       onWaveCleared: ({ wave }) => {
-        this.hud.banner('WAVE CLEARED', `Wave ${wave} destroyed · next wave incoming`);
+        this.hud.banner('WAVE CLEARED', `Wave ${wave} destroyed · press BUILD to place turrets`);
       },
       onLevelComplete: ({ level }) => {
         const bonus = 40 * level;
@@ -120,8 +131,20 @@ export class Game {
     this._q = new THREE.Quaternion();
     this._m = new THREE.Matrix4();
 
+    this.build = new BuildMode(this);
+    this.turretSoundCooldown = 0;
+
     window.addEventListener('resize', () => this.onResize());
     document.getElementById('restart-btn').addEventListener('click', () => this.restart());
+    document.getElementById('build-btn').addEventListener('click', () => this.toggleBuild());
+    this.nextWaveBtn = document.getElementById('next-wave-btn');
+    this.nextWaveBtn.addEventListener('click', () => this.callNextWave());
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      if (e.code === 'KeyB') this.toggleBuild();
+      else if (e.code === 'Escape' && this.build.active) this.build.exit();
+      else if (e.code === 'KeyN' || e.code === 'Enter') this.callNextWave();
+    });
 
     this.timer = new THREE.Timer();
     this.timer.connect(document);
@@ -136,21 +159,52 @@ export class Game {
     this.restart();
   }
 
+  toggleBuild() {
+    if (this.build.active) this.build.exit();
+    else if (this.state === 'playing') {
+      this.state = 'build';
+      this.dust.lines.visible = false;
+      this.build.enter();
+    }
+  }
+
+  onBuildExit() {
+    this.state = 'playing';
+    this.dust.lines.visible = true;
+    this.input.mouseDown = false;
+    this.input.mouseActive = false; // don't yank the ship towards a stale cursor position
+    this.camQuat.copy(this.ship.group.quaternion);
+  }
+
+  callNextWave() {
+    if (this.state !== 'playing' || this.waves.state !== 'break') return;
+    const bonus = this.waves.skip();
+    if (bonus > 0) {
+      this.coins += bonus;
+      this.audio.coin();
+    }
+  }
+
   restart() {
+    if (this.build.active) this.build.exit();
     document.getElementById('game-over').classList.add('hidden');
     this.ship.reset();
     this.enemies.clear();
     this.lasers.clear();
     this.enemyLasers.clear();
     this.pickups.clear();
+    this.turrets.clear();
+    this.turretLasers.clear();
+    this.missiles.clear();
+    this.planet.setShield(0);
     this.waves.reset();
     this.score = 0;
-    this.coins = 0;
+    this.coins = CONFIG.startCoins;
     this.planetHp = CONFIG.planet.hp;
     this.respawnTimer = 0;
     this.camQuat.copy(this.ship.group.quaternion);
     this.state = 'playing';
-    this.hud.banner('DEFEND YOUR HOMEWORLD', 'Enemy fleet detected · first wave in 3 seconds', { duration: 3000 });
+    this.hud.banner('DEFEND YOUR HOMEWORLD', 'Build turrets before the first wave arrives', { duration: 3500 });
   }
 
   onResize() {
@@ -173,6 +227,14 @@ export class Game {
   }
 
   update(dt) {
+    if (this.state === 'build') {
+      // Paused: only the tactical camera and cosmetic bits move.
+      this.build.update(dt, this.camera);
+      this.planet.update(dt * 0.2);
+      this.sky.update(this.camera, this.time);
+      this.hud.update(this);
+      return;
+    }
     const playing = this.state === 'playing';
     this.input.update();
 
@@ -192,7 +254,18 @@ export class Game {
       lasers: this.enemyLasers,
       time: this.time,
     });
+    if (this.state !== 'menu') {
+      this.turrets.update(dt, {
+        enemies: this.enemies,
+        lasers: this.turretLasers,
+        missiles: this.missiles,
+        time: this.time,
+        onFire: (type, slot) => this._turretSound(type, slot),
+      });
+      this.missiles.update(dt, this.enemies, (p, damage, splash) => this._missileExplode(p, damage, splash));
+    }
     this.lasers.update(dt);
+    this.turretLasers.update(dt);
     this.enemyLasers.update(dt);
     if (this.state !== 'menu') this._collisions();
 
@@ -217,7 +290,9 @@ export class Game {
     this.sky.update(this.camera, this.time);
 
     if (this.state !== 'menu') this.hud.update(this);
+    this.nextWaveBtn.classList.toggle('hidden', !(playing && this.waves.state === 'break'));
     this.hitSoundCooldown -= dt;
+    this.turretSoundCooldown -= dt;
   }
 
   _updateControls(dt, playing) {
@@ -351,6 +426,20 @@ export class Game {
       if (hitSomething) this.lasers.kill(l);
     }
 
+    // Turret lasers vs enemies (they pass harmlessly through everything else).
+    for (const l of this.turretLasers.list) {
+      if (!l.active) continue;
+      for (const e of this.enemies.list) {
+        if (!e.active) continue;
+        const hit = segmentHitsSphere(l.prev, l.mesh.position, e.group.position, e.radius);
+        if (!hit) continue;
+        this.turretLasers.kill(l);
+        this.effects.sparks(hit, 6, new THREE.Color(1, 3.5, 3), 16, 0.4, 0.25);
+        if (this.enemies.damage(e, l.damage)) this._onEnemyDestroyed(e);
+        break;
+      }
+    }
+
     // Enemy lasers vs the player and the planet.
     for (const l of this.enemyLasers.list) {
       if (!l.active) continue;
@@ -430,10 +519,33 @@ export class Game {
     if (dead) this._onShipDestroyed();
   }
 
+  _turretSound(type, slot) {
+    if (this.turretSoundCooldown > 0) return;
+    // Quieter the further the turret is from the camera.
+    const d = slot.pos.distanceTo(this.camera.position);
+    const vol = THREE.MathUtils.clamp(1 - d / 500, 0.08, 0.5);
+    if (type === 'laser') this.audio.laser(vol);
+    else this.audio.dash(vol);
+    this.turretSoundCooldown = 0.07;
+  }
+
+  _missileExplode(p, damage, splash) {
+    this.effects.explosion(p, 3.5, 0);
+    const d = p.distanceTo(this.camera.position);
+    this.audio.explosion(THREE.MathUtils.clamp(1 - d / 600, 0.2, 0.9));
+    for (const e of this.enemies.list) {
+      if (!e.active) continue;
+      if (e.group.position.distanceTo(p) > splash + e.radius) continue;
+      if (this.enemies.damage(e, damage)) this._onEnemyDestroyed(e);
+    }
+  }
+
   _damagePlanet(amount, at) {
     if (this.state !== 'playing') return;
+    const reduction = this.turrets.shieldReduction;
+    amount *= 1 - reduction;
     this.planetHp = Math.max(0, this.planetHp - amount);
-    this.planet.flash();
+    this.planet.flash(reduction > 0, at);
     this.effects.sparks(at, amount > 0.5 ? 26 : 8, new THREE.Color(4, 1.4, 0.4), amount > 0.5 ? 26 : 10, 0.9, 0.6);
     if (amount > 0.5) this.effects.ring(at, 8, 0.4);
     if (this.planetHp <= 0) this._onPlanetDestroyed();

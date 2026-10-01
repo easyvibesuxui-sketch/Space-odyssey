@@ -29,6 +29,7 @@ export async function loadAssets(onProgress) {
 
   // Warm the browser cache for the menu art / preloader video so they never pop in.
   track(preloadImage(`${BASE}assets/keyart.jpg`));
+  for (const t of ['laser', 'missile', 'shield']) track(preloadImage(`${BASE}assets/turret-${t}.jpg`));
   track(waitForVideo(document.getElementById('preloader-video')));
 
   // Give fonts a chance so the HUD doesn't flash fallback text.

@@ -32,7 +32,7 @@ export class Audio {
     g.exponentialRampToValueAtTime(0.0001, t + attack + decay);
   }
 
-  laser() {
+  laser(volume = 1) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
@@ -40,7 +40,7 @@ export class Audio {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(1400 + Math.random() * 200, t);
     osc.frequency.exponentialRampToValueAtTime(220, t + 0.12);
-    this._env(gain, t, 0.005, 0.12, 0.12);
+    this._env(gain, t, 0.005, 0.12 * volume, 0.12);
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 3200;
@@ -105,7 +105,25 @@ export class Audio {
     osc.stop(t + 0.1);
   }
 
-  dash() {
+  // Rising arpeggio when a turret is built or upgraded.
+  build() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [523.3, 659.3, 784, 1046.5].forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const start = t + i * 0.06;
+      this._env(gain, start, 0.005, 0.12, 0.18);
+      osc.connect(gain).connect(this.master);
+      osc.start(start);
+      osc.stop(start + 0.25);
+    });
+  }
+
+  // Whoosh (used for missile launches).
+  dash(volume = 1) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
@@ -116,7 +134,7 @@ export class Audio {
     filter.frequency.setValueAtTime(400, t);
     filter.frequency.exponentialRampToValueAtTime(3000, t + 0.25);
     const gain = this.ctx.createGain();
-    this._env(gain, t, 0.03, 0.35, 0.25);
+    this._env(gain, t, 0.03, 0.35 * volume, 0.25);
     src.connect(filter).connect(gain).connect(this.master);
     src.start(t);
     src.stop(t + 0.3);

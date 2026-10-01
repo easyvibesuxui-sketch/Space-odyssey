@@ -14,7 +14,7 @@ export class Waves {
     this.level = 1;
     this.wave = 0; // wave within the current level (1..perLevel)
     this.state = 'break';
-    this.timer = 3;
+    this.timer = CONFIG.waves.firstBreak;
     this.queue = [];
     this.spawnTimer = 0;
   }
@@ -30,6 +30,14 @@ export class Waves {
 
   get remaining() {
     return this.enemies.activeCount + this.queue.length;
+  }
+
+  // Call the next wave early. Returns bonus coins for the time skipped.
+  skip() {
+    if (this.state !== 'break') return 0;
+    const bonus = Math.floor(this.timer);
+    this.timer = 0;
+    return bonus;
   }
 
   update(dt) {
