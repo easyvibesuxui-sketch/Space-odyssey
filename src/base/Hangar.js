@@ -368,8 +368,14 @@ export class Hangar {
       this.locked = document.pointerLockElement === canvas;
     });
     document.addEventListener('mousemove', (e) => {
-      if (!this.active || !this.locked) return;
-      this._look(e.movementX, e.movementY, 0.0022);
+      if (!this.active || this.game.baseUI.panelOpen) return;
+      if (this.locked) {
+        this._look(e.movementX, e.movementY, 0.0022);
+      } else if (e.target === canvas && !this.lookDrag) {
+        // Free look without capturing the cursor (pointer lock can be refused or not yet
+        // granted): plain mouse movement turns the head; edges keep turning (see update()).
+        this._look(e.movementX, e.movementY, 0.0035);
+      }
     });
     canvas.addEventListener('pointerdown', (e) => {
       if (!this.active || this.game.baseUI.panelOpen) return;
@@ -407,6 +413,12 @@ export class Hangar {
 
   releasePointer() {
     if (document.pointerLockElement) document.exitPointerLock?.();
+  }
+
+  // Re-capture the mouse (must run inside a user gesture, e.g. closing a panel by click).
+  capturePointer() {
+    if (!this.active || this.game.isTouch || this.locked) return;
+    this.canvas.requestPointerLock?.()?.catch?.(() => {});
   }
 
   // ---------------------------------------------------------------- lifecycle
@@ -453,6 +465,12 @@ export class Hangar {
         strafe = input.joy.x;
       }
     }
+    // Uncaptured mouse resting near the left/right edge keeps turning the view.
+    if (canMove && !this.locked && !this.lookDrag && input.mouseActive && !this.game.isTouch) {
+      const ax = input.aim.x;
+      const edge = Math.max(0, Math.abs(ax) - 0.8) / 0.2;
+      if (edge > 0) this.yaw -= Math.sign(ax) * edge * 1.8 * dt;
+    }
     const speed = input.keys.has('ShiftLeft') ? 9 : 5.5;
     _dir.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     _right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
@@ -485,6 +503,7 @@ export class Hangar {
     this.holo.rotation.y += dt * 0.8;
     this.ship.holder.position.y = 3.0 + Math.sin(this.time * 1.3) * 0.06;
     for (const g of this.ship.model.glows) g.scale.setScalar(0.7 + Math.random() * 0.1);
+    this.ship.model.mods.update(dt, this.time);
     this.field.material.uniforms.uTime.value = this.time;
     this.planetView.rotation.y += dt * 0.01;
     this.sky.update(this.camera, this.time);

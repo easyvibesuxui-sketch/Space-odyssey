@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
+import { TurretBadges } from '../ui/TurretBadges.js';
 
 const MAN_RANGE = 45; // how close the ship must be to take over a turret
 const MANUAL_DAMAGE = 1.5;
@@ -259,8 +260,8 @@ export class TurretControl {
       }
     }
 
-    const name = `${CONFIG.turrets.types[t.type].name} · Lv ${t.level}`;
-    if (this._lastName !== name) this.nameEl.textContent = this._lastName = name;
+    const name = `${CONFIG.turrets.types[t.type].name} <span class="rank">${TurretBadges.chevrons(t.level)} Lv ${t.level}</span>`;
+    if (this._lastName !== name) this.nameEl.innerHTML = this._lastName = name;
     if (this._lastStatus !== status) this.statusEl.textContent = this._lastStatus = status;
   }
 

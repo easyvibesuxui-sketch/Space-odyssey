@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
+import { TurretBadges } from './TurretBadges.js';
 
 const BASE = import.meta.env.BASE_URL;
 const COIN = `<img class="coin-icon" src="${BASE}assets/coin.png" alt="" />`;
@@ -200,7 +201,7 @@ export class BuildMode {
       ? `<button class="action upgrade" data-action="upgrade" ${game.coins >= upCost ? '' : 'disabled'}>UPGRADE ${COIN} ${upCost}</button>`
       : `<button class="action upgrade" disabled>MAX LEVEL</button>`;
     this.panel.innerHTML = `${summary}
-      <div class="panel-title" style="color:${def.color}">${def.name} · Level ${t.level}</div>
+      <div class="panel-title rank-title" style="color:${def.color}">${def.name} <span class="rank">${TurretBadges.chevrons(t.level)} Level ${t.level}/${CONFIG.turrets.maxLevel}</span></div>
       <div class="stats">${stats}</div>
       <div class="actions">${upgradeBtn}<button class="action sell" data-action="sell">SELL +${turrets.sellValue(t)}</button></div>
       <div class="actions"><button class="action control" data-action="control">TAKE CONTROL ▶</button></div>`;

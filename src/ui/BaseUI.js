@@ -1,5 +1,5 @@
 import { CONFIG } from '../config.js';
-import { UPGRADES, MAX_UPGRADE, upgradeCost, applyUpgrades } from '../systems/Upgrades.js';
+import { UPGRADES, MAX_UPGRADE, upgradeCost } from '../systems/Upgrades.js';
 import { findPromo } from '../core/Promo.js';
 
 const BASE = import.meta.env.BASE_URL;
@@ -215,6 +215,7 @@ export class BaseUI {
     if (btn.classList.contains('promo-apply')) return;
     if (action === 'close') {
       this.close();
+      g.hangar.capturePointer();
       return;
     }
     if (action === 'unload' && this.cargo) {
@@ -229,7 +230,8 @@ export class BaseUI {
       if (cost === null || g.coins < cost) return;
       g.coins -= cost;
       g.upgrades[u.id]++;
-      applyUpgrades(g.upgrades);
+      g.applyShipUpgrades();
+      this.toast(`${u.name} ${g.upgrades[u.id]}/${MAX_UPGRADE} installed · look at your ship`);
       g.audio.build();
     } else if (action === 'repair') {
       const missing = Math.ceil(CONFIG.planet.hp - g.planetHp);

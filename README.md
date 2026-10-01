@@ -12,7 +12,8 @@ If the planet's HP reaches zero the game is over; if your ship is destroyed it r
 
 Between waves, open the **tactical view** (B / BUILD) to spend coins on orbital turrets:
 Laser Turret (fast, anti-fighter), Missile Battery (homing, splash) and Shield Generator
-(reduces planet damage). Turrets upgrade to level 3 and sell for 50%. Calling the next wave
+(reduces planet damage). Turrets upgrade to level 3 (rank chevrons float over every turret; a green ▲ marks
+ones you can afford to upgrade) and sell for 50%. Calling the next wave
 early (N / NEXT WAVE) pays bonus coins. You can also **take control of any turret** (fly close
 and press F, or TAKE CONTROL in the tactical view): aim from the gunner's seat with +50% damage,
 lock missiles onto targets, or overcharge the planetary shield.
@@ -25,7 +26,9 @@ teleports, and its EMP knocks nearby turrets offline).
 
 After every boss you return to your **home base**: a first-person hangar where you walk
 around, unload the level's cargo (rewards), upgrade your ship at the Ship Systems terminal
-(laser power, fire rate, hull, shield, engines, salvage bonus — 5 levels each), repair the
+(laser power, fire rate, hull, shield, engines, salvage bonus — 5 levels each; every upgrade is
+visible on the ship: gun barrels and heavier bolts, extra wing gun pods, armour plates, shield
+emitters, hotter engine flames, a gold salvage ring — and listed in the HUD), repair the
 homeworld, then board your ship to launch the next level. Progress is saved at the base
 (CONTINUE on the title screen, RETRY FROM BASE after a defeat).
 
@@ -50,7 +53,7 @@ npm run build    # production build in dist/
 | V: cockpit / chase view | VIEW button |
 | F near a turret: take manual control (F/Esc to exit) | MAN button |
 | B: tactical/build view · N: call next wave early | BUILD / NEXT WAVE buttons |
-| Base: WASD walk · mouse look (click to capture) · E interact · Shift run | Stick walk · drag look · tap / USE interact |
+| Base: WASD walk · mouse look (click to lock the cursor) · E interact · Shift run | Stick walk · drag look · tap / USE interact |
 
 ## Structure
 
@@ -64,6 +67,8 @@ npm run build    # production build in dist/
 - `src/ui/Hud.js` – HUD, radar, off-screen enemy markers, banners
 - `src/systems/TurretControl.js` – manual turret control (gunner view, lock-on, overcharge)
 - `src/ui/BuildMode.js` – tactical view: orbit camera, slot picking, build/upgrade/sell panel
+- `src/ui/TurretBadges.js` – rank chevron badges over turrets
+- `src/entities/ShipMods.js` – visible ship upgrades (parts fitted to the hull by ray-casting)
 - `src/base/Hangar.js` – first-person home base (hangar, ship on its pad, terminals, view to the planet)
 - `src/ui/BaseUI.js` – base prompts and panels (cargo, ship upgrades, repair, launch)
 - `src/systems/Upgrades.js` – ship upgrade definitions; `src/core/Save.js` – localStorage save

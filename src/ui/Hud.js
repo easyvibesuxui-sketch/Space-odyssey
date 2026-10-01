@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
+import { UPGRADES, MAX_UPGRADE } from '../systems/Upgrades.js';
 
 const RADAR_RANGE = 650;
 const _v = new THREE.Vector3();
@@ -35,6 +36,17 @@ export class Hud {
     this.boxes = [];
     this._last = {};
     this._bannerTimer = null;
+  }
+
+  // Compact strip of installed ship upgrades (dim = not upgraded yet).
+  setMods(levels) {
+    const el = document.getElementById('ship-mods');
+    const SHORT = { damage: 'LSR', firerate: 'ROF', hull: 'HUL', shield: 'SHD', engine: 'ENG', magnet: 'MAG' };
+    el.innerHTML = UPGRADES.map((u) => {
+      const l = levels[u.id] ?? 0;
+      const pips = Array.from({ length: MAX_UPGRADE }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('');
+      return `<div class="mod ${l ? 'has' : ''}" style="--accent:${u.color}" title="${u.name} ${l}/${MAX_UPGRADE}"><b>${SHORT[u.id]}</b><span>${pips}</span></div>`;
+    }).join('');
   }
 
   show(v) {

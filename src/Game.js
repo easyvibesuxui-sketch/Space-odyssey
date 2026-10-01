@@ -25,7 +25,8 @@ import { BuildMode } from './ui/BuildMode.js';
 import { TurretControl } from './systems/TurretControl.js';
 import { BaseUI } from './ui/BaseUI.js';
 import { Hangar } from './base/Hangar.js';
-import { emptyUpgrades, applyUpgrades } from './systems/Upgrades.js';
+import { TurretBadges } from './ui/TurretBadges.js';
+import { emptyUpgrades, applyUpgrades, UPGRADES } from './systems/Upgrades.js';
 import { loadSave, writeSave } from './core/Save.js';
 import { instantiate } from './core/Models.js';
 
@@ -153,7 +154,7 @@ export class Game {
     this.planetHp = CONFIG.planet.hp;
     this.levelKills = 0;
     this.upgrades = emptyUpgrades();
-    applyUpgrades(this.upgrades);
+    this.applyShipUpgrades();
 
     this.aimPoint = new THREE.Vector3();
     this.aimNdc = new THREE.Vector2(0, 0.13);
@@ -182,6 +183,7 @@ export class Game {
 
     this.build = new BuildMode(this);
     this.turretControl = new TurretControl(this);
+    this.badges = new TurretBadges(this);
     this.overcharge = 0; // seconds of shield overcharge left (from a manned Shield Generator)
     this.hangar = new Hangar(this);
     this.baseUI = new BaseUI(this);
@@ -306,7 +308,7 @@ export class Game {
       this.bloom.strength = 0.7;
       this.hud.show(true);
 
-      applyUpgrades(this.upgrades);
+      this.applyShipUpgrades();
       this.ship.reset();
       this.camQuat.copy(this.ship.group.quaternion);
       this.respawnTimer = 0;
@@ -317,8 +319,29 @@ export class Game {
       this.waves.queue = [];
       this.state = 'playing';
       this.saveProgress();
-      this.hud.banner(`LEVEL ${this.waves.level}`, 'The enemy fleet returns · reinforce your turrets', { duration: 3500 });
+      const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+      const mods = UPGRADES.filter((u) => this.upgrades[u.id] > 0).map((u) => `${u.name} ${ROMAN[this.upgrades[u.id]]}`);
+      this.hud.banner(
+        `LEVEL ${this.waves.level}`,
+        mods.length ? `Ship upgrades online: ${mods.join(' · ')}` : 'The enemy fleet returns · reinforce your turrets',
+        { duration: mods.length ? 4500 : 3500 }
+      );
     });
+  }
+
+  // Apply upgrade stats and show them on the ship: bolted-on mods, laser bolts, HUD strip.
+  applyShipUpgrades() {
+    applyUpgrades(this.upgrades);
+    const up = this.upgrades;
+    this.ship.model.mods.set(up);
+    this.hangar?.ship.model.mods.set(up);
+    const k = (up.damage ?? 0) / 5;
+    this.lasers.setStyle(
+      new THREE.Color(1.2, 3.2, 8).lerp(new THREE.Color(3.4, 4.8, 8), k),
+      1 + (up.damage ?? 0) * 0.22,
+      1 + (up.damage ?? 0) * 0.08
+    );
+    this.hud.setMods?.(up);
   }
 
   saveProgress(cargo = this.baseUI?.cargo ?? null) {
@@ -344,7 +367,7 @@ export class Game {
     this.planetHp = save.planetHp ?? CONFIG.planet.hp;
     this.promosUsed = save.promosUsed ?? [];
     this.upgrades = { ...emptyUpgrades(), ...save.upgrades };
-    applyUpgrades(this.upgrades);
+    this.applyShipUpgrades();
     for (const t of save.turrets ?? []) {
       const slot = this.turrets.slots[t.slot];
       if (!slot || slot.turret || !CONFIG.turrets.types[t.type]) continue;
@@ -442,7 +465,7 @@ export class Game {
     this.planetHp = CONFIG.planet.hp;
     this.levelKills = 0;
     this.upgrades = emptyUpgrades();
-    applyUpgrades(this.upgrades);
+    this.applyShipUpgrades();
     this.ship.reset(); // pick up the reset stats
     this.respawnTimer = 0;
     this.camQuat.copy(this.ship.group.quaternion);
@@ -467,6 +490,7 @@ export class Game {
     const dt = Math.min(this.timer.getDelta(), 1 / 20);
     this.time += dt;
     this.update(dt);
+    this.badges.update();
     this.composer.render();
   }
 

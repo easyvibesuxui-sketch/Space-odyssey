@@ -38,6 +38,12 @@ export class Lasers {
     return l;
   }
 
+  // Recolour / resize every bolt (player laser upgrades).
+  setStyle(color, width = 1, length = 1) {
+    this.list[0].mesh.material.color.copy(color);
+    for (const l of this.list) l.mesh.scale.set(width, width, length);
+  }
+
   kill(l) {
     l.active = false;
     l.mesh.visible = false;

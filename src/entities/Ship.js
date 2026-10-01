@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { instantiate } from '../core/Models.js';
+import { ShipMods } from './ShipMods.js';
 
 // The player's starfighter: the COLAID1 GLB when loaded, otherwise a primitive placeholder.
 // Either way the visual lives in `this.model` with the same shape (root/roll/guns/trails/glows).
@@ -108,12 +109,18 @@ export class Ship {
 
     // Engines: trail length follows speed.
     const thrust = THREE.MathUtils.clamp((this.speed - cfg.minSpeed) / (cfg.boostSpeed - cfg.minSpeed), 0, 1);
-    const len = 0.35 + thrust * 1.5;
+    // Engine Tuning makes the flames visibly longer, wider and hotter.
+    const mods = this.model.mods;
+    const eng = mods.engine;
+    const len = (0.35 + thrust * 1.5) * (1 + eng * 0.08);
+    const wide = 1 + eng * 0.06;
     for (let i = 0; i < this.model.trails.length; i++) {
-      const flick = 0.9 + Math.sin(time * 40 + i * 1.7) * 0.06 + Math.random() * 0.06;
+      const flick = (0.9 + Math.sin(time * 40 + i * 1.7) * 0.06 + Math.random() * 0.06) * wide;
       this.model.trails[i].scale.set(flick, flick, len * (0.95 + Math.random() * 0.1));
-      this.model.glows[i].scale.setScalar((this.model.glows[i].userData.base ?? 1.1) * flick * (this.boosting ? 1.5 : 1));
+      this.model.glows[i].scale.setScalar((this.model.glows[i].userData.base ?? 1.1) * flick * (1 + eng * 0.03) * (this.boosting ? 1.5 : 1));
     }
+    mods.update(dt, time);
+    mods.settle(dt);
 
     this.shieldFlash = Math.max(0, this.shieldFlash - dt * 3);
     this.shieldMesh.material.uniforms.uStrength.value = this.shieldFlash;
@@ -122,8 +129,10 @@ export class Ship {
 
   // Returns muzzle world position (alternates between the two guns).
   nextMuzzle(out) {
+    this.gunIndex %= this.model.guns.length;
     const gun = this.model.guns[this.gunIndex];
     this.gunIndex = (this.gunIndex + 1) % this.model.guns.length;
+    this.model.mods.kick();
     return gun.getWorldPosition(out);
   }
 
@@ -145,7 +154,9 @@ export class Ship {
 }
 
 export function makePlayerModel(models = {}) {
-  return models.player ? buildShipFromGLB(models.player) : buildShipModel();
+  const model = models.player ? buildShipFromGLB(models.player) : buildShipModel();
+  model.mods = new ShipMods(model);
+  return model;
 }
 
 // GLB ship + engine flames on its four rear nozzles + two gun muzzles at the nose.
@@ -153,7 +164,8 @@ function buildShipFromGLB(model) {
   const root = new THREE.Group();
   const roll = new THREE.Group();
   root.add(roll);
-  roll.add(instantiate(model).root);
+  const hull = instantiate(model).root;
+  roll.add(hull);
 
   const { x: W, y: H, z: L } = model.size;
   const rearZ = L / 2 - 0.25;
@@ -192,7 +204,7 @@ function buildShipFromGLB(model) {
     roll.add(muzzle);
     guns.push(muzzle);
   }
-  return { root, roll, guns, trails, glows };
+  return { root, roll, guns, trails, glows, hull, source: model, size: model.size, trailMat };
 }
 
 export function buildShipModel() {
@@ -324,7 +336,7 @@ export function buildShipModel() {
     if (o.isMesh) o.castShadow = false;
   });
   root.scale.setScalar(0.75);
-  return { root, roll, guns, trails, glows };
+  return { root, roll, guns, trails, glows, hull: null, size: new THREE.Vector3(11, 1.5, 7.5), trailMat };
 }
 
 function makeTrailGeometry() {
@@ -341,6 +353,7 @@ function makeTrailMaterial() {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
+    uniforms: { uPower: { value: 0 } },
     vertexShader: /* glsl */ `
       varying float vT;
       varying vec3 vN;
@@ -354,14 +367,17 @@ function makeTrailMaterial() {
       }
     `,
     fragmentShader: /* glsl */ `
+      uniform float uPower;
       varying float vT;
       varying vec3 vN;
       varying vec3 vV;
       void main() {
         float edge = pow(abs(dot(vN, vV)), 1.5);
-        float fade = pow(1.0 - clamp(vT, 0.0, 1.0), 1.6);
+        float fade = pow(1.0 - clamp(vT, 0.0, 1.0), 1.6 - uPower * 0.5);
         vec3 col = mix(vec3(0.15, 0.6, 2.0), vec3(1.2, 1.8, 3.0), edge * (1.0 - vT));
-        gl_FragColor = vec4(col * edge * fade * 0.8, 1.0);
+        // Tuned engines burn hotter: a white-cyan core.
+        col = mix(col, vec3(1.0, 2.0, 3.2), uPower * 0.5 * edge);
+        gl_FragColor = vec4(col * edge * fade * (0.8 + uPower * 0.25), 1.0);
       }
     `,
   });

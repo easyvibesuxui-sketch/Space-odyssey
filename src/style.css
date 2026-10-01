@@ -926,3 +926,72 @@ body.turbo #turbo-fx { opacity: 1; animation: turbo-pulse 0.35s ease-in-out infi
   border-radius: 4px;
   cursor: pointer;
 }
+
+/* ---------- Turret rank chevrons ---------- */
+#turret-badges { position: fixed; inset: 0; z-index: 12; pointer-events: none; overflow: hidden; }
+#turret-badges.hidden, .turret-badge.hidden { display: none; }
+body.base-mode #turret-badges { display: none; }
+.turret-badge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px 3px;
+  border-radius: 6px;
+  background: rgba(4, 16, 32, 0.72);
+  border: 1px solid var(--accent, var(--cyan));
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5), inset 0 0 8px rgba(255, 255, 255, 0.04);
+  transform-origin: 50% 100%;
+  font-family: 'Orbitron', sans-serif;
+  will-change: transform;
+}
+.turret-badge::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--accent, var(--cyan));
+}
+.turret-badge .lv { font-size: 0.55rem; font-weight: 700; letter-spacing: 0.12em; color: #fff; }
+.turret-badge.max { border-color: var(--gold); box-shadow: 0 0 14px rgba(255, 201, 74, 0.55); }
+.turret-badge.max .lv { color: var(--gold); }
+.turret-badge.selected { outline: 2px solid #fff; outline-offset: 2px; }
+.turret-badge.offline { opacity: 0.45; filter: grayscale(1); }
+.turret-badge .up {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.55rem;
+  color: #04101f;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: badge-pulse 1.1s ease-in-out infinite;
+}
+@keyframes badge-pulse { 50% { transform: scale(1.18); } }
+
+.chevrons { width: 22px; height: auto; display: block; overflow: visible; }
+.chevrons polyline { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.chevrons polyline.on { stroke: var(--gold); filter: drop-shadow(0 0 2px rgba(255, 201, 74, 0.9)); }
+.rank { display: inline-flex; align-items: center; gap: 6px; color: var(--gold); font-size: 0.85em; margin-left: 8px; vertical-align: middle; }
+.rank .chevrons { width: 18px; }
+
+/* ---------- Installed ship upgrades (HUD) ---------- */
+.ship-mods { display: grid; grid-template-columns: repeat(3, auto); gap: 4px 10px; margin-top: 4px; justify-content: start; }
+.ship-mods .mod { display: flex; align-items: center; gap: 5px; opacity: 0.35; }
+.ship-mods .mod.has { opacity: 1; }
+.ship-mods .mod b { font-size: 0.55rem; letter-spacing: 0.1em; color: var(--accent); width: 26px; }
+.ship-mods .mod span { display: flex; gap: 2px; }
+.ship-mods .mod i { width: 7px; height: 4px; border-radius: 1px; background: rgba(255, 255, 255, 0.15); }
+.ship-mods .mod i.on { background: var(--accent); box-shadow: 0 0 4px var(--accent); }
+@media (max-width: 600px) { .ship-mods { display: none; } }
