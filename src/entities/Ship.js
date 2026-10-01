@@ -89,7 +89,8 @@ export class Ship {
     } else {
       this.boost = Math.min(cfg.boostMax, this.boost + cfg.boostRegen * dt);
     }
-    this.speed += (target - this.speed) * (1 - Math.exp(-2.5 * dt));
+    // Turbo kicks in hard; easing off is gentler.
+    this.speed += (target - this.speed) * (1 - Math.exp((this.boosting ? -4 : -2) * dt));
 
     this.velocity.copy(this.forward).multiplyScalar(this.speed);
     g.position.addScaledVector(this.velocity, dt);

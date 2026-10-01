@@ -29,9 +29,14 @@
           <button id="launch-btn" class="launch-btn" disabled>LOADING…</button>
           <button id="continue-btn" class="launch-btn secondary hidden">CONTINUE</button>
         </div>
+        <form id="promo-form" class="promo-row" autocomplete="off">
+          <input id="promo-input" type="text" inputmode="numeric" maxlength="16" placeholder="PROMO CODE" aria-label="Promo code" />
+          <button id="promo-btn" type="submit">APPLY</button>
+        </form>
+        <div id="promo-msg"></div>
         <div class="controls-hint">
-          <span class="desktop-only"><b>Mouse</b> steer &amp; aim · <b>Click</b> fire · <b>W/S</b> throttle · <b>A/D</b> roll · <b>Shift</b> boost</span>
-          <span class="touch-only"><b>Stick</b> steer · <b>FIRE</b> shoot · <b>BOOST</b> speed</span>
+          <span class="desktop-only"><b>Mouse</b> steer &amp; aim · <b>Click</b> fire · <b>W/S</b> throttle · <b>A/D</b> roll · <b>Shift</b> turbo</span>
+          <span class="touch-only"><b>Stick</b> steer · <b>FIRE</b> shoot · <b>TURBO</b> speed</span>
           <span class="mission">Enemy fleets are coming for your homeworld. Hold the line.</span>
         </div>
         <button id="credits-btn" class="link-btn">Credits</button>
@@ -50,7 +55,7 @@
           <div class="bar"><div class="bar-fill shield" id="shield-fill"></div></div>
         </div>
         <div class="bar-group">
-          <label>BOOST</label>
+          <label>TURBO</label>
           <div class="bar"><div class="bar-fill boost" id="boost-fill"></div></div>
         </div>
         <div class="bar-group planet-group">
@@ -83,6 +88,7 @@
       <div id="turret-prompt"></div>
       <div id="crosshair"></div>
       <div id="damage-flash"></div>
+      <div id="turbo-fx"><span>TURBO</span></div>
     </div>
 
     <!-- Manual turret control -->
@@ -120,7 +126,7 @@
     <div id="touch-controls" class="hidden">
       <div id="joystick"><div id="joystick-knob"></div></div>
       <button id="fire-btn">FIRE</button>
-      <button id="boost-btn">BOOST</button>
+      <button id="boost-btn">TURBO</button>
       <button id="use-btn" class="hidden">USE</button>
       <button id="man-btn" class="hidden">MAN</button>
     </div>

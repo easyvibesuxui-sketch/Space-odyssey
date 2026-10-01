@@ -66,13 +66,13 @@ export const UPGRADES = [
   },
   {
     id: 'magnet',
-    name: 'Coin Magnet',
-    desc: '+25% coin pickup radius',
+    name: 'Salvage Magnet',
+    desc: '+15% coins from every wreck',
     icon: 'up-magnet.jpg',
     color: '#ffc94a',
     costs: [50, 90, 140, 200, 280],
-    apply: (l) => (CONFIG.coins.magnetRadius = BASE.coins.magnetRadius * (1 + 0.25 * l)),
-    value: () => `${Math.round(CONFIG.coins.magnetRadius)} m radius`,
+    apply: (l) => (CONFIG.coins.bonus = BASE.coins.bonus + 0.15 * l),
+    value: () => `+${Math.round(CONFIG.coins.bonus * 100)}% salvage`,
   },
 ];
 

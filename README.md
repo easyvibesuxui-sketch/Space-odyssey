@@ -2,7 +2,11 @@
 
 3D space shooter / planet defense in the browser (Three.js + Vite).
 
-Fly freely around your homeworld and destroy the enemy fleets that attack it in waves.
+Every game starts in your **home base**; walk to your ship to launch. A promo code field on the
+title screen can unlock bonus coins.
+
+Fly freely around your homeworld and destroy the enemy fleets that attack it in waves. Salvage
+coins from every wreck fly to your ship automatically.
 Fighters either hunt you or raid the planet; bombers settle into low orbit and bombard it.
 If the planet's HP reaches zero the game is over; if your ship is destroyed it respawns.
 
@@ -21,7 +25,7 @@ teleports, and its EMP knocks nearby turrets offline).
 
 After every boss you return to your **home base**: a first-person hangar where you walk
 around, unload the level's cargo (rewards), upgrade your ship at the Ship Systems terminal
-(laser power, fire rate, hull, shield, engines, coin magnet — 5 levels each), repair the
+(laser power, fire rate, hull, shield, engines, salvage bonus — 5 levels each), repair the
 homeworld, then board your ship to launch the next level. Progress is saved at the base
 (CONTINUE on the title screen, RETRY FROM BASE after a defeat).
 
@@ -42,7 +46,7 @@ npm run build    # production build in dist/
 | Mouse: steer & aim (ship turns towards the crosshair) | Stick: steer |
 | Click / Space: fire | FIRE button (with aim assist) |
 | W / S: throttle · A / D: roll · arrows: pitch/yaw | |
-| Shift: boost | BOOST button |
+| Shift (hold): turbo | TURBO button (hold) |
 | V: cockpit / chase view | VIEW button |
 | F near a turret: take manual control (F/Esc to exit) | MAN button |
 | B: tactical/build view · N: call next wave early | BUILD / NEXT WAVE buttons |

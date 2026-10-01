@@ -46,6 +46,20 @@ export class BaseUI {
     this.game.hangar.setCargoLoaded(!!cargo);
   }
 
+  // Short message at the top of the base screen.
+  toast(text) {
+    let el = document.getElementById('base-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'base-toast';
+      this.root.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+  }
+
   hide() {
     this.root.classList.add('hidden');
     this.close();
@@ -53,8 +67,12 @@ export class BaseUI {
 
   refresh() {
     const g = this.game;
-    this.coinsEl.textContent = g.coins;
+    this.coinsEl.textContent = g.coins.toLocaleString('en-US');
     this.titleEl.textContent = `HOME BASE · NEXT: LEVEL ${g.waves.level}`;
+    if (this._shownHint !== g.waves.level && g.waves.level === 1 && !this.cargo) {
+      this._shownHint = g.waves.level;
+      this.toast('Upgrade your ship at SHIP SYSTEMS, then walk to your ship to launch');
+    }
   }
 
   update() {

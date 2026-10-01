@@ -189,7 +189,7 @@ export class Game {
     this.turretSoundCooldown = 0;
 
     window.addEventListener('resize', () => this.onResize());
-    document.getElementById('restart-btn').addEventListener('click', () => this.restart());
+    document.getElementById('restart-btn').addEventListener('click', () => this._fadeThen(() => this.newGame()));
     document.getElementById('retry-btn').addEventListener('click', () => {
       const save = loadSave();
       if (save) this._fadeThen(() => this.loadGame(save));
@@ -219,14 +219,35 @@ export class Game {
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
-  start(save = null) {
+  // Every game starts in the home base; the first level launches from the hangar.
+  start(save = null, { promo = null } = {}) {
     document.getElementById('touch-controls').classList.toggle('hidden', !this.isTouch);
     if (save) {
-      this.loadGame(save);
+      const data = { ...save };
+      if (promo && !(data.promosUsed ?? []).includes(promo.id)) {
+        data.coins = (data.coins ?? 0) + promo.coins;
+        data.promosUsed = [...(data.promosUsed ?? []), promo.id];
+      }
+      this.loadGame(data);
+      this.saveProgress(data.cargo ?? null);
     } else {
-      this.hud.show(true);
-      this.restart();
+      this.newGame(promo);
     }
+    if (promo) this.baseUI.toast(`PROMO ${promo.id} · +${promo.coins.toLocaleString('en-US')} coins`);
+  }
+
+  newGame(promo = null) {
+    this.loadGame({
+      level: 1,
+      coins: promo ? promo.coins : CONFIG.startCoins,
+      score: 0,
+      planetHp: CONFIG.planet.hp,
+      upgrades: {},
+      turrets: [],
+      cargo: null,
+      promosUsed: promo ? [promo.id] : [],
+    });
+    this.saveProgress(null);
   }
 
   // ------------------------------------------------------------ home base
@@ -255,6 +276,8 @@ export class Game {
       this.missiles.clear();
 
       this.state = 'base';
+      document.body.classList.remove('turbo');
+      this._wasTurbo = false;
       document.body.classList.add('base-mode');
       this.hud.show(false);
       this.renderPass.scene = this.hangar.scene;
@@ -298,6 +321,7 @@ export class Game {
       score: this.score,
       planetHp: this.planetHp,
       upgrades: this.upgrades,
+      promosUsed: this.promosUsed ?? [],
       turrets: this.turrets.slots.filter((s) => s.turret).map((s) => ({ slot: s.index, type: s.turret.type, level: s.turret.level, spent: s.turret.spent })),
       cargo,
     });
@@ -311,6 +335,7 @@ export class Game {
     this.coins = save.coins ?? CONFIG.startCoins;
     this.score = save.score ?? 0;
     this.planetHp = save.planetHp ?? CONFIG.planet.hp;
+    this.promosUsed = save.promosUsed ?? [];
     this.upgrades = { ...emptyUpgrades(), ...save.upgrades };
     applyUpgrades(this.upgrades);
     for (const t of save.turrets ?? []) {
@@ -323,6 +348,8 @@ export class Game {
     }
     this.planet.setShield(this.turrets.shieldReduction);
     this.state = 'base';
+    document.body.classList.remove('turbo');
+    this._wasTurbo = false;
     document.body.classList.add('base-mode');
     this.hud.show(false);
     this.renderPass.scene = this.hangar.scene;
@@ -468,6 +495,12 @@ export class Game {
       if (playing && this.ship.alive) this._handleFiring(dt);
     }
 
+    // Turbo feedback: whoosh on engage, speed-line overlay while active.
+    const turbo = this.ship.boosting && this.state === 'playing';
+    if (turbo && !this._wasTurbo) this.audio.dash(0.7);
+    if (turbo !== this._wasTurbo) document.body.classList.toggle('turbo', turbo);
+    this._wasTurbo = turbo;
+
     // Shield overcharge from a manned Shield Generator.
     if (this.overcharge > 0) this.overcharge = Math.max(0, this.overcharge - dt);
     this.planet.setShield(this.shieldReduction);
@@ -508,7 +541,11 @@ export class Game {
 
     const collected = this.pickups.update(dt, this.ship.group.position, this.time, this.ship.alive);
     if (collected > 0) {
-      this.coins += collected;
+      // Salvage bonus accumulates fractions so +15% on single coins still pays out.
+      this.coinFrac = (this.coinFrac ?? 0) + collected * (1 + CONFIG.coins.bonus);
+      const whole = Math.floor(this.coinFrac);
+      this.coinFrac -= whole;
+      this.coins += whole;
       this.audio.coin();
     }
 
@@ -927,7 +964,7 @@ export class Game {
       cam.position.y += (Math.random() - 0.5) * s * s * 1.6;
     }
 
-    const targetFov = this.ship.boosting ? this.baseFov + 10 : this.baseFov;
+    const targetFov = this.ship.boosting ? this.baseFov + 16 : this.baseFov;
     if (Math.abs(cam.fov - targetFov) > 0.05) {
       cam.fov = THREE.MathUtils.lerp(cam.fov, targetFov, 1 - Math.exp(-5 * dt));
       cam.updateProjectionMatrix();

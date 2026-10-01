@@ -8,20 +8,20 @@ export const CONFIG = {
   arenaRadius: 850,
 
   ship: {
-    speed: 38,
-    minSpeed: 15,
-    maxSpeed: 60,
-    boostSpeed: 100,
+    speed: 24,
+    minSpeed: 10,
+    maxSpeed: 36,
+    boostSpeed: 105, // turbo (hold Shift / TURBO)
     accel: 45,
-    turnRate: 1.6, // rad/s at full stick
+    turnRate: 1.5, // rad/s at full stick
     rollRate: 2.6,
     hull: 100,
     shield: 60,
     shieldRegenDelay: 3,
     shieldRegenRate: 14,
     boostMax: 100,
-    boostDrain: 38,
-    boostRegen: 20,
+    boostDrain: 30,
+    boostRegen: 18,
     respawnTime: 3,
   },
 
@@ -104,6 +104,9 @@ export const CONFIG = {
   },
 
   coins: {
+    // Coins burst out of wrecks, then fly to the player by themselves after this delay.
+    homingDelay: 0.45,
+    bonus: 0, // extra coin fraction from the Salvage upgrade
     magnetRadius: 24,
     collectRadius: 3.6,
     life: 25,

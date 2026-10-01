@@ -26,6 +26,10 @@ requestAnimationFrame(animateBar);
 
 const audio = new Audio();
 
+const PROMO_CODES = {
+  1010: { id: '1010', coins: 10_000_000, label: '10,000,000 coins unlocked' },
+};
+
 // Credits for third-party 3D models (CC-BY requires attribution).
 document.getElementById('credits-list').innerHTML = CREDITS.map(
   (c) => `<div class="credit"><b>${c.what}</b> · “${c.title}” by ${c.author} · ${c.license}<br/><a href="${c.url}" target="_blank" rel="noopener">${c.url}</a></div>`
@@ -42,6 +46,19 @@ async function boot() {
 
   const save = loadSave();
   const continueBtn = document.getElementById('continue-btn');
+
+  // Promo codes. Applied when the player starts (new game) or continues.
+  let promo = null;
+  const promoMsg = document.getElementById('promo-msg');
+  document.getElementById('promo-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = document.getElementById('promo-input').value.trim().toUpperCase();
+    promo = PROMO_CODES[code] ?? null;
+    promoMsg.className = promo ? 'ok' : 'bad';
+    promoMsg.textContent = promo ? `✓ ${promo.label}` : 'Invalid promo code';
+    if (promo) audio.unlock();
+  });
+
   const begin = (fromSave) => {
     audio.unlock();
     if (isTouch && document.documentElement.requestFullscreen) {
@@ -51,11 +68,11 @@ async function boot() {
     setTimeout(() => {
       preloader.remove();
     }, 900);
-    game.start(fromSave);
+    game.start(fromSave, { promo });
   };
 
   launchBtn.disabled = false;
-  launchBtn.textContent = save ? 'NEW GAME' : isTouch ? 'TAP TO LAUNCH' : 'LAUNCH';
+  launchBtn.textContent = save ? 'NEW GAME' : isTouch ? 'TAP TO START' : 'START';
   launchBtn.addEventListener('click', () => begin(null), { once: true });
   if (save) {
     continueBtn.textContent = `CONTINUE · LEVEL ${save.level}`;

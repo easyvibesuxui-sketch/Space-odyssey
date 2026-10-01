@@ -68,7 +68,7 @@ export class Hud {
     });
     this._set('score', game.score, (v) => (this.score.textContent = v.toLocaleString('en-US')));
     this._set('coins', game.coins, (v) => {
-      this.coinCount.textContent = v;
+      this.coinCount.textContent = v.toLocaleString('en-US');
       this.coinBox.classList.remove('pop');
       void this.coinBox.offsetWidth; // restart animation
       this.coinBox.classList.add('pop');

@@ -37,6 +37,7 @@ export class Pickups {
       c.phase = rand(0, 6.28);
       c.size = value > 1 ? 2.6 : 1.8;
       c.homing = false;
+      c.age = 0;
       c.sprite.position.copy(pos);
       c.vel.randomDirection().multiplyScalar(rand(4, 12));
       c.sprite.visible = true;
@@ -59,15 +60,17 @@ export class Pickups {
       if (!c.active) continue;
       const p = c.sprite.position;
       c.life -= dt;
+      c.age += dt;
 
       toShip.subVectors(shipPos, p);
       const dist = toShip.length();
-      if (canCollect && !c.homing && dist < magnetRadius) c.homing = true;
+      // Coins burst out of the wreck, then fly to the player on their own.
+      if (canCollect && !c.homing && (c.age > CONFIG.coins.homingDelay || dist < magnetRadius)) c.homing = true;
 
       if (c.homing && canCollect) {
-        // Locked on: fly straight into the ship, accelerating (faster than the ship can fly).
-        const speed = Math.max(c.vel.length(), 60) + 260 * dt;
-        c.vel.copy(toShip).normalize().multiplyScalar(speed);
+        // Accelerate hard so even far-away salvage (turret kills) arrives in a couple of seconds.
+        const speed = Math.min(Math.max(c.vel.length(), 40) + (180 + dist * 0.8) * dt, 600);
+        c.vel.lerp(toShip.normalize().multiplyScalar(speed), 1 - Math.exp(-10 * dt));
       } else {
         c.vel.multiplyScalar(Math.exp(-1.5 * dt));
       }
@@ -76,7 +79,8 @@ export class Pickups {
       const spin = Math.abs(Math.cos(time * 4 + c.phase));
       c.sprite.scale.set(c.size * Math.max(spin, 0.12), c.size, 1);
 
-      if (canCollect && dist < collectRadius) {
+      // A fast coin can cover more than the pickup radius in one frame: count it if it would reach us.
+      if (canCollect && dist < collectRadius + (c.homing ? c.vel.length() * dt : 0)) {
         collected += c.value;
         c.active = false;
         c.sprite.visible = false;
