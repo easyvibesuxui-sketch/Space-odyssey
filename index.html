@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#04101f" />
+    <title>Space Odyssey</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <!-- Preloader -->
+    <div id="preloader">
+      <video id="preloader-video" src="/assets/preloader.mp4" poster="/assets/keyart.jpg" autoplay muted loop playsinline preload="auto"></video>
+      <div class="preloader-shade"></div>
+      <div class="preloader-content">
+        <h1 class="title">SPACE <span>ODYSSEY</span></h1>
+        <p class="subtitle">Defend your homeworld</p>
+        <div class="loader">
+          <img class="loader-coin" src="/assets/coin.png" alt="" />
+          <div class="loader-bar"><div class="loader-fill" id="loader-fill"></div></div>
+          <span class="loader-pct" id="loader-pct">0%</span>
+        </div>
+        <button id="launch-btn" class="launch-btn" disabled>LOADING…</button>
+        <div class="controls-hint">
+          <span class="desktop-only"><b>WASD</b> move · <b>Mouse</b> aim · <b>Click</b> fire · <b>Shift</b> dash</span>
+          <span class="touch-only"><b>Left stick</b> move · <b>Drag right</b> aim · <b>FIRE</b> shoot</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-top-left">
+        <div class="bar-group">
+          <label>HULL</label>
+          <div class="bar"><div class="bar-fill hull" id="hull-fill"></div></div>
+        </div>
+        <div class="bar-group">
+          <label>SHIELD</label>
+          <div class="bar"><div class="bar-fill shield" id="shield-fill"></div></div>
+        </div>
+        <div class="bar-group">
+          <label>PLANET</label>
+          <div class="bar"><div class="bar-fill planet" id="planet-fill"></div></div>
+        </div>
+      </div>
+      <div class="hud-top-right">
+        <div class="coins" id="coins"><img src="/assets/coin.png" alt="" /><span id="coin-count">0</span></div>
+        <div class="score">SCORE <span id="score">0</span></div>
+      </div>
+      <div class="hud-bottom-left desktop-only">
+        <div class="dash" id="dash-indicator">DASH</div>
+      </div>
+      <div id="crosshair"></div>
+      <div id="damage-flash"></div>
+    </div>
+
+    <!-- Touch controls -->
+    <div id="touch-controls" class="hidden">
+      <div id="joystick"><div id="joystick-knob"></div></div>
+      <button id="fire-btn">FIRE</button>
+      <button id="dash-btn">DASH</button>
+    </div>
+
+    <!-- Game over -->
+    <div id="game-over" class="overlay hidden">
+      <h2>SHIP DESTROYED</h2>
+      <p>Score <span id="final-score">0</span> · Coins <span id="final-coins">0</span></p>
+      <button id="restart-btn" class="launch-btn">RELAUNCH</button>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
