@@ -1108,3 +1108,8 @@ body.base-mode.mech-mode #use-btn { bottom: max(140px, env(safe-area-inset-botto
 #pause-menu .setting b { min-width: 52px; color: var(--cyan); }
 #pause-menu .pause-hint { font-size: 0.9rem; color: rgba(223, 246, 255, 0.6); letter-spacing: 0.04em; }
 @media (max-width: 600px) { #pause-menu .setting { flex-wrap: wrap; justify-content: center; } }
+
+/* Cockpit view: radar and bars move onto the cockpit's dashboard screen. */
+body.cockpit-view:not(.build-mode):not(.turret-mode) .hud-top-left .bar-group,
+body.cockpit-view:not(.build-mode):not(.turret-mode) #radar { display: none; }
+body.cockpit-view:not(.build-mode):not(.turret-mode) .hud-top-left:not(:has(.ship-mods > *)) { display: none; }

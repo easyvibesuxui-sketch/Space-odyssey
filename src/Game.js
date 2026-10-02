@@ -26,6 +26,7 @@ import { TurretControl } from './systems/TurretControl.js';
 import { BaseUI } from './ui/BaseUI.js';
 import { Hangar } from './base/Hangar.js';
 import { TurretBadges } from './ui/TurretBadges.js';
+import { CockpitDisplay } from './ui/CockpitDisplay.js';
 import { GroundWar } from './base/GroundWar.js';
 import { Mechs } from './base/Mechs.js';
 import { Companion } from './base/Companion.js';
@@ -188,6 +189,7 @@ export class Game {
       this.cockpit = instantiate(assets.models.cockpit).root;
       this.cockpit.visible = false;
       this.ship.group.add(this.cockpit);
+      this.cockpitDisplay = new CockpitDisplay(this.cockpit, this.hud);
     }
     this.cockpitEye = COCKPIT_EYE.clone();
     this.viewMode = 'chase';
@@ -780,6 +782,7 @@ export class Game {
     this.sky.update(this.camera, this.time);
 
     if (this.state !== 'menu') this.hud.update(this);
+    if (this.viewMode === 'cockpit' && this.cockpit?.visible) this.cockpitDisplay?.update(this);
     this.nextWaveBtn.classList.toggle('hidden', !(playing && this.waves.state === 'break'));
     this.hitSoundCooldown -= dt;
     this.turretSoundCooldown -= dt;
