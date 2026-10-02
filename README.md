@@ -60,6 +60,7 @@ npm run build    # production build in dist/
 | Click / Space: fire | FIRE button (with aim assist) |
 | W / S: throttle · A / D: roll · arrows: pitch/yaw | |
 | Shift (hold): turbo | TURBO button (hold) |
+| P / Esc: pause menu (mouse sensitivity) | PAUSE button |
 | V: cockpit / chase view | VIEW button |
 | F near a turret: take manual control (F/Esc to exit) | MAN button |
 | B: tactical/build view · N: call next wave early | BUILD / NEXT WAVE buttons |

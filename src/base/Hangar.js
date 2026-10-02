@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Sky } from '../world/Sky.js';
 import { makePlayerModel } from '../entities/Ship.js';
 import { instantiate } from '../core/Models.js';
+import { settings } from '../core/Settings.js';
 
 // Room layout (metres). The front (z = FRONT) is open to space.
 export const HALF_W = 24;
@@ -439,6 +440,7 @@ export class Hangar {
   }
 
   _look(dx, dy, sens) {
+    sens *= settings.sensitivity;
     this.yaw -= dx * sens;
     this.pitch = THREE.MathUtils.clamp(this.pitch - dy * sens, -1.3, 1.3);
   }
@@ -500,7 +502,7 @@ export class Hangar {
     if (canMove && !this.locked && !this.lookDrag && input.mouseActive && !this.game.isTouch) {
       const ax = input.aim.x;
       const edge = Math.max(0, Math.abs(ax) - 0.8) / 0.2;
-      if (edge > 0) this.yaw -= Math.sign(ax) * edge * 1.8 * dt;
+      if (edge > 0) this.yaw -= Math.sign(ax) * edge * 1.8 * settings.sensitivity * dt;
     }
     const speed = input.keys.has('ShiftLeft') ? 9 : 5.5;
     _dir.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));

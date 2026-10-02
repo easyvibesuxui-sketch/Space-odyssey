@@ -5,6 +5,7 @@ import { rotateTowards } from './GroundWar.js';
 import { HALF_W, BACK, HEIGHT } from './Hangar.js';
 
 const _v = new THREE.Vector3();
+const RETURN_AFTER = 12; // seconds a mech may stand around away from its bay
 const _q = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -89,6 +90,9 @@ export class Mechs {
       gun: 0,
       flash: 0,
       moving: false,
+      idle: 0,
+      returning: false,
+      stuck: 0,
     };
     this.hangar.interactables.push({ id: `bay:${key}`, mesh: hit, reach: 9 });
     state.obstacle = { c: holder.position, r: Math.max(size.x, size.z) * 0.32, enabled: false };
@@ -208,6 +212,8 @@ export class Mechs {
     if (!m || !m.owned || m.wrecked) return;
     this.piloting = key;
     m.obstacle.enabled = false;
+    m.returning = false;
+    m.idle = 0;
     this.hangar.yaw = m.yaw;
     this.hangar.pitch = -0.1;
     this.camPos.copy(this.hangar.camera.position);
@@ -222,6 +228,8 @@ export class Mechs {
     document.body.classList.remove('mech-mode');
     if (!m) return;
     m.obstacle.enabled = m.owned;
+    m.moving = false;
+    m.idle = 0;
     if (m.walk) m.walk.paused = true;
     // Step out beside the mech.
     const side = _v.set(Math.cos(m.yaw), 0, -Math.sin(m.yaw)).multiplyScalar(m.obstacle.r + 1.4);
@@ -318,16 +326,71 @@ export class Mechs {
     }
   }
 
+  // A mech left standing somewhere walks back to its bay by itself (wrecks get towed).
+  _autoReturn(m, dt) {
+    const dx = m.bayPos.x - m.pos.x;
+    const dz = m.bayPos.z - m.pos.z;
+    const d = Math.hypot(dx, dz);
+    const home = d < 0.35;
+    if (home && !m.returning) {
+      // Parked: settle into the bay's facing.
+      m.yaw = rotateTowards(m.yaw, m.bayYaw, 1.5 * dt);
+      m.holder.rotation.y = m.yaw;
+      m.moving = false;
+      m.idle = 0;
+      return;
+    }
+    if (!m.returning) {
+      m.idle += dt;
+      if (m.idle < RETURN_AFTER) {
+        m.moving = false;
+        return;
+      }
+      m.returning = true;
+      m.stuck = 0;
+    }
+    if (m.wrecked || m.stuck > 8) {
+      // Towed (or freed when stuck): pop back into the bay.
+      this.game.war.effects.sparks(_v.copy(m.pos).setY(1), 14, new THREE.Color(1, 2.5, 4), 6, 0.5, 0.4);
+      m.pos.copy(m.bayPos);
+      m.yaw = m.bayYaw;
+      m.holder.rotation.y = m.yaw;
+      m.returning = false;
+      m.moving = false;
+      return;
+    }
+    if (home) {
+      m.pos.set(m.bayPos.x, 0, m.bayPos.z);
+      m.returning = false;
+      m.moving = false;
+      return;
+    }
+    const before = _v.copy(m.pos);
+    const bx = before.x;
+    const bz = before.z;
+    const step = Math.min(d, m.def.speed * 0.55 * dt);
+    m.yaw = rotateTowards(m.yaw, Math.atan2(-dx, -dz), 2 * dt);
+    m.pos.x += (dx / d) * step;
+    m.pos.z += (dz / d) * step;
+    this.hangar.collide(m.pos, m.obstacle.r * 0.8, false);
+    m.holder.rotation.y = m.yaw;
+    const progress = Math.hypot(m.pos.x - bx, m.pos.z - bz);
+    m.stuck = progress < step * 0.3 ? m.stuck + dt : Math.max(0, m.stuck - dt);
+    m.moving = true;
+    m.phase += dt * m.def.speed * 0.5;
+  }
+
   // Animation for every mech (walk cycle while moving, procedural sway for static models).
   update(dt) {
     for (const m of this.list) {
       if (!m.inst) continue;
       const piloted = this.piloting === m.key;
+      if (!piloted && m.owned) this._autoReturn(m, dt);
       if (m.walk) {
-        m.walk.paused = !(piloted && m.moving);
+        m.walk.paused = !m.moving;
         m.walk.timeScale = 1.1;
         m.mixer.update(dt);
-      } else if (piloted && m.moving) {
+      } else if (m.moving) {
         // No skeleton: bob and sway the whole body.
         m.inst.root.position.y = Math.abs(Math.sin(m.phase * 2.2)) * 0.12;
         m.inst.root.rotation.z = Math.sin(m.phase * 2.2) * 0.03;

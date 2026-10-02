@@ -1087,3 +1087,24 @@ body.base-mode.mech-mode #use-btn { bottom: max(140px, env(safe-area-inset-botto
 }
 #build-panel .cards { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 600px) { #build-panel .cards { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- Pause menu ---------- */
+#pause-menu { z-index: 60; }
+#pause-menu h2 { color: var(--cyan); text-shadow: 0 0 20px rgba(79, 216, 255, 0.7); }
+#pause-menu .setting {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  color: #dff6ff;
+  background: rgba(4, 16, 32, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+#pause-menu input[type='range'] { width: min(260px, 50vw); accent-color: var(--cyan); }
+#pause-menu .setting b { min-width: 52px; color: var(--cyan); }
+#pause-menu .pause-hint { font-size: 0.9rem; color: rgba(223, 246, 255, 0.6); letter-spacing: 0.04em; }
+@media (max-width: 600px) { #pause-menu .setting { flex-wrap: wrap; justify-content: center; } }

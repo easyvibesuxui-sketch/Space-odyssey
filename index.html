@@ -71,6 +71,7 @@
       <div class="hud-actions">
         <button id="build-btn" class="hud-btn">BUILD <kbd class="desktop-only">B</kbd></button>
         <button id="view-btn" class="hud-btn">VIEW <kbd class="desktop-only">V</kbd></button>
+        <button id="pause-btn" class="hud-btn">PAUSE <kbd class="desktop-only">P</kbd></button>
         <button id="next-wave-btn" class="hud-btn next hidden">NEXT WAVE ▶ <kbd class="desktop-only">N</kbd></button>
       </div>
       <div class="hud-top-center">
@@ -114,12 +115,28 @@
         <div class="base-title" id="base-title">HOME BASE</div>
         <div class="coins"><img src="/assets/coin.png" alt="" /><span id="base-coins">0</span></div>
         <button id="base-promo-btn" class="hud-btn small">PROMO</button>
+        <button id="base-pause-btn" class="hud-btn small">II</button>
       </div>
       <div class="base-dot"></div>
       <div id="base-prompt"></div>
       <div class="base-hint desktop-only"><b>WASD</b> walk · <b>Mouse</b> look (click to lock) · <b>E</b> interact · <b>Shift</b> run</div>
       <div class="base-hint touch-only"><b>Stick</b> walk · <b>Drag</b> look · <b>Tap</b> interact</div>
       <div id="base-panel" class="hidden"></div>
+    </div>
+
+    <!-- Pause menu -->
+    <div id="pause-menu" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <label class="setting">
+        <span>Mouse sensitivity</span>
+        <input id="sens-slider" type="range" min="0.2" max="3" step="0.05" value="1" />
+        <b id="sens-value">1.00×</b>
+      </label>
+      <p class="pause-hint">P / Esc to resume · progress is saved whenever you are in the home base</p>
+      <div class="launch-row">
+        <button id="pause-resume" class="launch-btn">RESUME</button>
+        <button id="pause-quit" class="launch-btn secondary">QUIT TO TITLE</button>
+      </div>
     </div>
 
     <div id="fade"></div>

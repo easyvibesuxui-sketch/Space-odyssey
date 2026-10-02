@@ -31,6 +31,7 @@ import { Mechs } from './base/Mechs.js';
 import { Companion } from './base/Companion.js';
 import { emptyUpgrades, applyUpgrades, UPGRADES, MAX_UPGRADE } from './systems/Upgrades.js';
 import { loadSave, writeSave } from './core/Save.js';
+import { settings, saveSettings } from './core/Settings.js';
 import { instantiate } from './core/Models.js';
 
 const AIM_DISTANCE = 500;
@@ -223,7 +224,17 @@ export class Game {
     this.nextWaveBtn.addEventListener('click', () => this.callNextWave());
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
+      if (e.target instanceof HTMLInputElement) return;
+      if (e.code === 'KeyP' || (e.code === 'Escape' && this.paused)) {
+        this.togglePause();
+        return;
+      }
+      if (this.paused) return;
       if (this.state === 'base') return;
+      if (e.code === 'Escape' && this.state === 'playing' && !this.build.active) {
+        this.togglePause(true);
+        return;
+      }
       if (this.state === 'turret') {
         if (e.code === 'KeyF' || e.code === 'Escape') this.turretControl.exit();
         return;
@@ -235,12 +246,45 @@ export class Game {
       else if (e.code === 'KeyN' || e.code === 'Enter') this.callNextWave();
     });
 
+    this._bindPause();
     this.timer = new THREE.Timer();
     this.timer.connect(document);
     window.__game = this;
     if (location.search.includes('debug')) window.THREE = THREE; // test harness access // handy for debugging from the console
     this._updateCamera(1);
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  // Pause menu (P / Esc / pause buttons) with the mouse sensitivity setting.
+  _bindPause() {
+    const $ = (id) => document.getElementById(id);
+    this.pauseEl = $('pause-menu');
+    const slider = $('sens-slider');
+    const value = $('sens-value');
+    const show = () => (value.textContent = `${settings.sensitivity.toFixed(2)}×`);
+    slider.value = settings.sensitivity;
+    show();
+    slider.addEventListener('input', () => {
+      settings.sensitivity = +slider.value;
+      show();
+      saveSettings();
+    });
+    $('pause-resume').addEventListener('click', () => this.togglePause(false));
+    $('pause-quit').addEventListener('click', () => location.reload());
+    for (const id of ['pause-btn', 'base-pause-btn']) $(id)?.addEventListener('click', () => this.togglePause(true));
+  }
+
+  togglePause(on = !this.paused) {
+    if (!['playing', 'turret', 'build', 'base'].includes(this.state)) on = false;
+    if (on === !!this.paused) return;
+    this.paused = on;
+    this.pauseEl.classList.toggle('hidden', !on);
+    document.body.classList.toggle('paused', on);
+    if (on) {
+      this.input.mouseDown = false;
+      this.input.keys.clear();
+      if (document.pointerLockElement) document.exitPointerLock?.();
+    }
   }
 
   // Every game starts in the home base; the first level launches from the hangar.
@@ -608,8 +652,10 @@ export class Game {
   frame() {
     this.timer.update();
     const dt = Math.min(this.timer.getDelta(), 1 / 20);
-    this.time += dt;
-    this.update(dt);
+    if (!this.paused) {
+      this.time += dt;
+      this.update(dt);
+    }
     this.badges.update();
     this.composer.render();
   }
@@ -761,7 +807,9 @@ export class Game {
     let sx = input.keySteer.x;
     let sy = input.keySteer.y;
     if (!this.isTouch && sx === 0 && sy === 0 && input.mouseActive) {
-      const dz = (v) => (Math.abs(v) < 0.035 ? 0 : (v - Math.sign(v) * 0.035) / 0.45);
+      // Mouse sensitivity: how far from the nose the cursor must be for a full-rate turn.
+      const span = 0.45 / settings.sensitivity;
+      const dz = (v) => (Math.abs(v) < 0.035 ? 0 : (v - Math.sign(v) * 0.035) / span);
       sx = dz(input.aim.x - nose.x);
       sy = dz(input.aim.y - nose.y);
     }

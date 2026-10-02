@@ -47,6 +47,11 @@ export class BaseUI {
     window.addEventListener('keydown', (e) => {
       if (this.game.state !== 'base' || e.repeat) return;
       if (e.target instanceof HTMLInputElement) return; // typing a promo code
+      if (this.game.paused) return;
+      if (e.code === 'Escape' && !this.panelOpen) {
+        this.game.togglePause(true);
+        return;
+      }
       if (e.code === 'KeyE') {
         if (this.game.mechs.piloting && !this.panelOpen) this.game.mechs.exit();
         else if (this.panelOpen) this.close();

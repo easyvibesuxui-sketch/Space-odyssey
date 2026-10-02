@@ -29,7 +29,7 @@ const SPECS = {
   'mech-haze': { file: 'mech-haze.glb', height: 5.6, rotY: Math.PI, floor: true },
   'mech-centurion': { file: 'mech-centurion.glb', height: 6.4, rotY: 0, floor: true },
   'mech-pelter': { file: 'mech-pelter.glb', height: 6.0, rotY: 0, floor: true },
-  'mech-epic': { file: 'mech-epic.glb', height: 6.8, rotY: Math.PI, floor: true, remove: /^Plane/ },
+  'mech-epic': { file: 'mech-epic.glb', height: 6.8, rotY: 0, floor: true, remove: /^Plane/ },
   companion: { file: 'companion.glb', height: 1.95, rotY: Math.PI, floor: true },
 };
 

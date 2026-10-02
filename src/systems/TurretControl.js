@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { TurretBadges } from '../ui/TurretBadges.js';
+import { settings } from '../core/Settings.js';
 
 const MAN_RANGE = 45; // how close the ship must be to take over a turret
 const MANUAL_DAMAGE = 1.5;
@@ -163,6 +164,7 @@ export class TurretControl {
   }
 
   _look(dx, dy, sens) {
+    sens *= settings.sensitivity;
     this.yaw += dx * sens;
     this.pitch = THREE.MathUtils.clamp(this.pitch - dy * sens, -0.9, 1.45);
   }
