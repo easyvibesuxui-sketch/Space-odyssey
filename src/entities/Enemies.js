@@ -53,7 +53,9 @@ export class Enemies {
     e.evade = 0;
     e.orbitAxis.randomDirection();
     // ~40% of fighters hunt the player, the rest raid the planet unless the player gets close.
-    e.role = type === 'fighter' && Math.random() < 0.4 ? 'hunter' : 'raider';
+    // Interceptors always hunt; dropships head for a landing zone on the surface.
+    e.role = type === 'interceptor' || (type === 'fighter' && Math.random() < 0.4) ? 'hunter' : 'raider';
+    e.landing = type === 'dropship' ? position.clone().normalize().add(_v.randomDirection().multiplyScalar(0.5)).normalize() : null;
     e.group.position.copy(position);
     // Face the planet on arrival.
     _m.lookAt(position, new THREE.Vector3(0, 0, 0), UP);
@@ -63,9 +65,11 @@ export class Enemies {
 
   _create(type) {
     const glb = this.models[type];
+    const heavy = type === 'bomber' || type === 'dropship';
     const model = glb
       ? buildFromGLB(glb, this.glowTex, type)
-      : type === 'bomber' ? buildBomber(this.glowTex) : buildFighter(this.glowTex);
+      : heavy ? buildBomber(this.glowTex) : buildFighter(this.glowTex);
+    if (!glb && type === 'dropship') model.root.scale.setScalar(1.6);
     this.scene.add(model.root);
     return {
       type,
@@ -107,7 +111,21 @@ export class Enemies {
       if (e.evade > 0) {
         e.evade -= dt;
         _desired.copy(e.evadeDir);
-      } else if (e.type === 'fighter' && ship.alive && playerDist < (e.role === 'hunter' ? 280 : 90)) {
+      } else if (e.type === 'dropship') {
+        // Straight for the landing zone; touching down hands the fight to the base.
+        const goal = _v2.copy(e.landing).multiplyScalar(R + 6);
+        _desired.subVectors(goal, pos);
+        if (alt < 14) {
+          e.active = false;
+          e.group.visible = false;
+          ctx.onLanded?.(e);
+          continue;
+        }
+        if (ship.alive && playerDist < 120) {
+          target = ship.group.position.clone();
+          targetIsPlayer = true;
+        }
+      } else if ((e.type === 'fighter' || e.type === 'interceptor') && ship.alive && playerDist < (e.role === 'hunter' ? (e.type === 'interceptor' ? 420 : 280) : 90)) {
         // Dogfight: lead the player.
         _desired.copy(ship.group.position).addScaledVector(ship.velocity, playerDist / CONFIG.enemyLaser.speed * 0.8).sub(pos);
         target = _desired.clone().add(pos);
@@ -133,8 +151,8 @@ export class Enemies {
         }
       }
 
-      // Never fly into the planet.
-      if (alt < 18) _desired.addScaledVector(_v2.copy(pos).normalize(), (18 - alt) * 0.4);
+      // Never fly into the planet (dropships want to).
+      if (alt < 18 && e.type !== 'dropship') _desired.addScaledVector(_v2.copy(pos).normalize(), (18 - alt) * 0.4);
 
       if (_desired.lengthSq() > 1e-6) {
         _m.lookAt(pos, _v2.copy(pos).add(_desired), UP);
@@ -155,7 +173,7 @@ export class Enemies {
       if (target && e.fireTimer <= 0) {
         const toT = _v2.subVectors(target, pos);
         const d = toT.length();
-        const cone = targetIsPlayer ? 0.3 : 1.1;
+        const cone = e.type === 'dropship' ? Math.PI : targetIsPlayer ? 0.3 : 1.1;
         if (d < cfg.range && toT.normalize().dot(fwd) > Math.cos(cone)) {
           e.fireTimer = cfg.fireInterval * rand(0.8, 1.3);
           const muzzle = e.model.guns[e.gunIndex].getWorldPosition(new THREE.Vector3());
@@ -312,8 +330,17 @@ function buildFromGLB(model, glowTex, type) {
   root.add(body);
   const { x: W, y: H, z: L } = model.size;
   const glows = [];
-  const engines = type === 'bomber' ? [[-0.12, 0], [0.12, 0]] : [[-0.18, -0.1], [0, -0.1], [0.18, -0.1]];
-  for (const [fx, fy] of engines) glows.push(addGlow(root, glowTex, fx * W, fy * H, L / 2 + 0.2, type === 'bomber' ? 3.6 : 2.6));
+  const engines = {
+    bomber: [[-0.12, 0], [0.12, 0]],
+    dropship: [[-0.22, 0], [0.22, 0], [0, 0.1]],
+    interceptor: [[-0.12, 0], [0.12, 0]],
+  }[type] ?? [[-0.18, -0.1], [0, -0.1], [0.18, -0.1]];
+  const glowSize = { bomber: 3.6, dropship: 5, interceptor: 3 }[type] ?? 2.6;
+  for (const [fx, fy] of engines) glows.push(addGlow(root, glowTex, fx * W, fy * H, L / 2 + 0.2, glowSize));
+  if (type === 'dropship') {
+    // Hazard beacons so troop carriers stand out: shoot these down first!
+    for (const z of [-0.3, 0.1]) addGlow(root, glowTex, 0, H * 0.6, z * L, 3.2).material.color.setRGB(5, 3, 0.3);
+  }
   const guns = [];
   for (const s of [-1, 1]) {
     const g = new THREE.Object3D();

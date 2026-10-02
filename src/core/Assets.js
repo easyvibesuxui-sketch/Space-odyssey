@@ -37,7 +37,7 @@ export async function loadAssets(onProgress) {
 
   // Warm the browser cache for the menu art / preloader video so they never pop in.
   track(preloadImage(`${BASE}assets/keyart.jpg`));
-  for (const t of ['laser', 'missile', 'shield']) track(preloadImage(`${BASE}assets/turret-${t}.jpg`));
+  for (const t of ['laser', 'missile', 'cannon', 'shield']) track(preloadImage(`${BASE}assets/turret-${t}.jpg`));
   for (const u of ['damage', 'firerate', 'hull', 'shield', 'engine', 'magnet']) track(preloadImage(`${BASE}assets/up-${u}.jpg`));
   track(waitForVideo(document.getElementById('preloader-video')));
 

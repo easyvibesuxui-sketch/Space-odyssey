@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { segmentHitsSphere } from './Lasers.js';
 import { makeRadialTexture } from '../world/Sky.js';
+import { buildZeusTurret } from './TurretModels.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _v = new THREE.Vector3();
@@ -9,8 +10,9 @@ const _v2 = new THREE.Vector3();
 
 // Orbital defence platforms. Slots sit on a ring around the planet; each can hold one turret.
 export class Turrets {
-  constructor(scene) {
+  constructor(scene, models = {}) {
     this.scene = scene;
+    this.models = models;
     this.slots = [];
     this.glowTex = makeRadialTexture([[0, 'rgba(255,255,255,1)'], [0.35, 'rgba(255,255,255,0.4)'], [1, 'rgba(255,255,255,0)']], 64);
     this._buildSlots();
@@ -140,7 +142,7 @@ export class Turrets {
   }
 
   build(slot, type) {
-    const model = buildTurretModel(type, this.glowTex);
+    const model = buildTurretModel(type, this.glowTex, this.models);
     model.root.position.copy(slot.pos);
     model.root.quaternion.setFromUnitVectors(UP, slot.normal);
     // lookAt() needs the platform's own up, or the head rolls sideways on a sphere.
@@ -172,7 +174,8 @@ export class Turrets {
 
   _refreshPips(t) {
     t.model.pips.forEach((p, i) => (p.visible = i < t.level));
-    t.model.root.scale.setScalar(1.5 + (t.level - 1) * 0.15);
+    t.model.setLevel?.(t.level); // GLB turrets change colour scheme with every level
+    t.model.root.scale.setScalar(1.5 + (t.level - 1) * 0.1);
   }
 
   // ctx: { enemies, lasers (turret lasers), missiles, time, onFire(type, slot) }
@@ -224,7 +227,8 @@ export class Turrets {
       if (best) {
         // Lead the target for lasers.
         const fwd = _v2.set(0, 0, -1).applyQuaternion(best.group.quaternion);
-        const lead = t.type === 'laser' ? best.group.position.distanceTo(slot.pos) / CONFIG.laser.speed : 0;
+        const boltSpeed = t.type === 'cannon' ? ctx.heavy.speed : CONFIG.laser.speed;
+        const lead = t.type === 'missile' ? 0 : best.group.position.distanceTo(slot.pos) / boltSpeed;
         const aim = _v.copy(best.group.position).addScaledVector(fwd, best.speed * lead);
         m.head.lookAt(aim);
 
@@ -234,6 +238,8 @@ export class Turrets {
           t.gunIndex = (t.gunIndex + 1) % m.muzzles.length;
           if (t.type === 'laser') {
             ctx.lasers.fire(muzzle, aim.clone(), stats.damage);
+          } else if (t.type === 'cannon') {
+            ctx.heavy.fire(muzzle, aim.clone(), stats.damage);
           } else {
             const dir = new THREE.Vector3().subVectors(muzzle, slot.pos).normalize();
             ctx.missiles.fire(muzzle, dir, best, stats.damage, stats.splash);
@@ -248,9 +254,32 @@ export class Turrets {
   }
 }
 
-function buildTurretModel(type, glowTex) {
-  const root = new THREE.Group();
+function buildTurretModel(type, glowTex, models = {}) {
   const color = new THREE.Color(CONFIG.turrets.types[type].color);
+  const glb = buildZeusTurret(models.turrets, type);
+  if (glb) {
+    // Model from the turret pack + a thin type-coloured rim and a power halo.
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(3.7, 0.1, 6, 40), new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(2.2) }));
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.15;
+    glb.root.add(rim);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTex,
+      color: color.clone().multiplyScalar(0.7),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    halo.scale.setScalar(7);
+    halo.position.y = 0.4;
+    glb.root.add(halo);
+    // Under the planet-facing platform: a strut like the procedural ones.
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 1.2, 3, 6), new THREE.MeshStandardMaterial({ color: 0x2a2e36, metalness: 0.7, roughness: 0.5 }));
+    strut.position.y = -1.5;
+    glb.root.add(strut);
+    return { ...glb, pips: [], core: null, rim, halo, shell: [] };
+  }
+  const root = new THREE.Group();
   const hdr = color.clone().multiplyScalar(3);
   const metal = new THREE.MeshStandardMaterial({ color: 0x8a919b, metalness: 0.6, roughness: 0.45 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x2a2e36, metalness: 0.7, roughness: 0.5 });
@@ -285,7 +314,7 @@ function buildTurretModel(type, glowTex) {
   const muzzles = [];
   let core = null;
 
-  if (type === 'laser') {
+  if (type === 'laser' || type === 'cannon') {
     head.add(new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 2.2), metal));
     for (const s of [-1, 1]) {
       const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 3.2, 8), dark);
@@ -348,5 +377,5 @@ function buildTurretModel(type, glowTex) {
   halo.position.y = 0.6;
   root.add(halo);
 
-  return { root, head, muzzles, pips, core, rim, halo };
+  return { root, head, muzzles, pips, core, rim, halo, eye: 1.4, shell: [head.children[0]] };
 }

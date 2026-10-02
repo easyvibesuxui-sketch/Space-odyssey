@@ -28,8 +28,9 @@ export const BOSS_TYPES = {
   },
   siege: {
     name: 'SIEGE BREAKER',
-    model: 'fighter',
-    length: 46,
+    model: 'titan',
+    fallback: 'fighter',
+    length: 64,
     hp: 2000,
     color: '#ff4d5e',
     hint: 'Charges a planet-cracker beam · shoot the glowing core to interrupt it',
@@ -85,7 +86,7 @@ export class Bosses {
     this.scene.add(root);
 
     // Hull: the provided model at boss scale (placeholder box if models failed to load).
-    const model = this.models[def.model];
+    const model = this.models[def.model] ?? this.models[def.fallback];
     let body;
     let materials = [];
     if (model) {

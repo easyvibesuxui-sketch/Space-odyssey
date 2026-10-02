@@ -26,7 +26,10 @@ import { TurretControl } from './systems/TurretControl.js';
 import { BaseUI } from './ui/BaseUI.js';
 import { Hangar } from './base/Hangar.js';
 import { TurretBadges } from './ui/TurretBadges.js';
-import { emptyUpgrades, applyUpgrades, UPGRADES } from './systems/Upgrades.js';
+import { GroundWar } from './base/GroundWar.js';
+import { Mechs } from './base/Mechs.js';
+import { Companion } from './base/Companion.js';
+import { emptyUpgrades, applyUpgrades, UPGRADES, MAX_UPGRADE } from './systems/Upgrades.js';
 import { loadSave, writeSave } from './core/Save.js';
 import { instantiate } from './core/Models.js';
 
@@ -79,7 +82,9 @@ export class Game {
     this.composer.addPass(new OutputPass());
 
     this.sky = new Sky(this.scene);
+    this.sky.addGasGiant(assets.models);
     this.planet = new Planet(this.scene, this.renderer);
+    this._addAerostats(assets.models.aerostat);
     this.asteroids = new Asteroids(this.scene);
     this.dust = new SpaceDust(this.scene);
     this.ship = new Ship(this.scene, assets.models);
@@ -98,20 +103,31 @@ export class Game {
     this.effects = new Effects(this.scene);
     this.effects.onResize(this.pixelRatio);
     this.pickups = new Pickups(this.scene, assets.coin);
-    this.turrets = new Turrets(this.scene);
+    this.turrets = new Turrets(this.scene, assets.models);
     this.turretLasers = new Lasers(this.scene, {
       color: new THREE.Color(0.6, 3.6, 3.0),
       pool: 90,
       thickness: 0.24,
       length: 4,
     });
+    // Rail cannon slugs: slow-firing, heavy, very visible.
+    this.heavyLasers = new Lasers(this.scene, {
+      color: new THREE.Color(6, 1.2, 1.4),
+      speed: 700,
+      life: 1.1,
+      pool: 40,
+      thickness: 0.7,
+      length: 10,
+    });
     this.missiles = new Missiles(this.scene, this.effects);
     this.bosses = new Bosses(this.scene, assets.models, this.effects);
     this.hud = new Hud();
     this.waves = new Waves(this.enemies, {
-      onWaveStart: ({ wave, fighters, bombers }) => {
+      onWaveStart: ({ wave, fighters, bombers, interceptors, dropships }) => {
         const parts = [`${fighters} fighters`];
         if (bombers) parts.push(`${bombers} bomber${bombers > 1 ? 's' : ''}`);
+        if (interceptors) parts.push(`${interceptors} interceptor${interceptors > 1 ? 's' : ''}`);
+        if (dropships) parts.push(`${dropships} DROPSHIP${dropships > 1 ? 'S' : ''} · don't let them land!`);
         this.hud.banner(`WAVE ${wave}`, `Incoming: ${parts.join(' · ')}`, { danger: true });
         this.audio.alarm?.();
       },
@@ -186,7 +202,12 @@ export class Game {
     this.badges = new TurretBadges(this);
     this.overcharge = 0; // seconds of shield overcharge left (from a manned Shield Generator)
     this.hangar = new Hangar(this);
+    this.war = new GroundWar(this);
+    this.mechs = new Mechs(this);
+    this.companion = new Companion(this);
     this.baseUI = new BaseUI(this);
+    this.pendingTroops = 0;
+    this.warTimer = 0;
     this.fadeEl = document.getElementById('fade');
     this.turretSoundCooldown = 0;
 
@@ -216,7 +237,8 @@ export class Game {
 
     this.timer = new THREE.Timer();
     this.timer.connect(document);
-    window.__game = this; // handy for debugging from the console
+    window.__game = this;
+    if (location.search.includes('debug')) window.THREE = THREE; // test harness access // handy for debugging from the console
     this._updateCamera(1);
     this.renderer.setAnimationLoop(() => this.frame());
   }
@@ -282,6 +304,7 @@ export class Game {
       this.lasers.clear();
       this.enemyLasers.clear();
       this.turretLasers.clear();
+      this.heavyLasers.clear();
       this.missiles.clear();
 
       this.state = 'base';
@@ -292,14 +315,83 @@ export class Game {
       this.renderPass.scene = this.hangar.scene;
       this.renderPass.camera = this.hangar.camera;
       this.bloom.strength = 0.3;
+      this.war.clear();
+      this.war.secured = false;
+      this.warReturn = false;
+      this.mechs.parkAll();
       this.hangar.enter();
       this.baseUI.show(cargo);
       this.saveProgress(cargo);
+      // A dropship that landed right at the end of the level still gets its fight.
+      if (this.pendingTroops > 0) {
+        this.warTimer = 0;
+        this.hangar.pos.set(0, 1.7, 9);
+        this.war.start(Math.min(this.pendingTroops, 14));
+        this.pendingTroops = 0;
+      }
+    });
+  }
+
+  // An enemy dropship touched down: its troops will storm the base in a few seconds.
+  _onDropshipLanded() {
+    this.pendingTroops += CONFIG.war.troopsPerDropship + this.waves.level;
+    if (this.warTimer > 0) return;
+    this.warTimer = 3.5;
+    this.hud.banner('DROPSHIP LANDED', 'Enemy troops are storming your base · get back there!', { danger: true, duration: 3200 });
+    this.audio.alarm();
+    setTimeout(() => this.audio.alarm(), 900);
+  }
+
+  // Space pauses while the player defends the base on foot (or in a mech).
+  enterBaseBattle() {
+    if (this.build.active) this.build.exit();
+    if (this.turretControl.active) this.turretControl.exit();
+    const troops = Math.min(this.pendingTroops, 14);
+    this.pendingTroops = 0;
+    this._fadeThen(() => {
+      this.state = 'base';
+      document.body.classList.remove('turbo');
+      this._wasTurbo = false;
+      document.body.classList.add('base-mode');
+      this.hud.show(false);
+      this.renderPass.scene = this.hangar.scene;
+      this.renderPass.camera = this.hangar.camera;
+      this.bloom.strength = 0.3;
+      this.mechs.parkAll();
+      this.hangar.enter();
+      // Start in the middle of the hangar, facing the open mouth.
+      this.hangar.pos.set(0, 1.7, 9);
+      this.baseUI.show(this.baseUI.cargo);
+      this.warReturn = true;
+      this.war.start(troops);
+      this.baseUI.toast('INVADERS IN THE BASE! Click to shoot · E to use a mech or the Armory');
+    });
+  }
+
+  // Back to the fight in orbit after the base is secured (the level carries on).
+  resumeFromBase() {
+    this._fadeThen(() => {
+      if (this.mechs.piloting) this.mechs.exit(true);
+      this.war.clear();
+      this.war.secured = false;
+      this.hangar.exit();
+      this.baseUI.hide();
+      document.body.classList.remove('base-mode');
+      this.renderPass.scene = this.scene;
+      this.renderPass.camera = this.camera;
+      this.bloom.strength = 0.7;
+      this.hud.show(true);
+      this.ship.reset();
+      this.camQuat.copy(this.ship.group.quaternion);
+      this.state = 'playing';
+      this.hud.banner('BACK IN ORBIT', 'Stop the next dropships before they land!', { duration: 3000 });
     });
   }
 
   launchFromBase() {
     this._fadeThen(() => {
+      if (this.mechs.piloting) this.mechs.exit(true);
+      this.war.clear();
       this.hangar.exit();
       this.baseUI.hide();
       document.body.classList.remove('base-mode');
@@ -319,7 +411,7 @@ export class Game {
       this.waves.queue = [];
       this.state = 'playing';
       this.saveProgress();
-      const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+      const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
       const mods = UPGRADES.filter((u) => this.upgrades[u.id] > 0).map((u) => `${u.name} ${ROMAN[this.upgrades[u.id]]}`);
       this.hud.banner(
         `LEVEL ${this.waves.level}`,
@@ -329,17 +421,33 @@ export class Game {
     });
   }
 
+  // Floating cities drifting in the homeworld's upper atmosphere (scenery only).
+  _addAerostats(model) {
+    if (!model) return;
+    const R = CONFIG.planet.radius;
+    this.aerostats = new THREE.Group();
+    for (const [lat, lon] of [[0.35, 0.4], [-0.2, 2.6], [0.55, 4.4]]) {
+      const n = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon));
+      const { root } = instantiate(model);
+      root.position.copy(n).multiplyScalar(R + 9);
+      root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+      root.scale.setScalar(0.45);
+      this.aerostats.add(root);
+    }
+    this.scene.add(this.aerostats);
+  }
+
   // Apply upgrade stats and show them on the ship: bolted-on mods, laser bolts, HUD strip.
   applyShipUpgrades() {
     applyUpgrades(this.upgrades);
     const up = this.upgrades;
     this.ship.model.mods.set(up);
     this.hangar?.ship.model.mods.set(up);
-    const k = (up.damage ?? 0) / 5;
+    const k = (up.damage ?? 0) / MAX_UPGRADE;
     this.lasers.setStyle(
       new THREE.Color(1.2, 3.2, 8).lerp(new THREE.Color(3.4, 4.8, 8), k),
-      1 + (up.damage ?? 0) * 0.22,
-      1 + (up.damage ?? 0) * 0.08
+      1 + k * 1.1,
+      1 + k * 0.4
     );
     this.hud.setMods?.(up);
   }
@@ -353,6 +461,9 @@ export class Game {
       upgrades: this.upgrades,
       promosUsed: this.promosUsed ?? [],
       turrets: this.turrets.slots.filter((s) => s.turret).map((s) => ({ slot: s.index, type: s.turret.type, level: s.turret.level, spent: s.turret.spent })),
+      mechs: this.mechs.serialize(),
+      sentries: this.war.sentries.map((s) => s.level),
+      companion: this.companion.serialize(),
       cargo,
     });
   }
@@ -377,6 +488,9 @@ export class Game {
       this.turrets._refreshPips(built);
     }
     this.planet.setShield(this.turrets.shieldReduction);
+    this.mechs.load(save.mechs ?? {});
+    this.war.sentries.forEach((s, i) => this.war.setSentryLevel(s, Math.min(save.sentries?.[i] ?? 0, 5)));
+    this.companion.load(save.companion);
     this.state = 'base';
     document.body.classList.remove('turbo');
     this._wasTurbo = false;
@@ -438,6 +552,11 @@ export class Game {
   restart() {
     if (this.build.active) this.build.exit();
     if (this.turretControl.active) this.turretControl.exit();
+    if (this.mechs.piloting) this.mechs.exit(true);
+    this.war.clear();
+    this.war.secured = false;
+    this.pendingTroops = 0;
+    this.warTimer = 0;
     this.overcharge = 0;
     if (this.state === 'base') {
       this.hangar.exit();
@@ -457,6 +576,7 @@ export class Game {
     this.pickups.clear();
     this.turrets.clear();
     this.turretLasers.clear();
+    this.heavyLasers.clear();
     this.missiles.clear();
     this.planet.setShield(0);
     this.waves.reset();
@@ -497,7 +617,17 @@ export class Game {
   update(dt) {
     if (this.state === 'base') {
       this.input.update();
-      this.hangar.update(dt, this.input, !this.baseUI.panelOpen);
+      const canMove = !this.baseUI.panelOpen;
+      if (this.mechs.piloting) {
+        this.mechs.updatePilot(dt, this.input, canMove);
+        this.hangar.target = null;
+      } else if (!this.war.player.dead) {
+        this.hangar.update(dt, this.input, canMove);
+      }
+      this.hangar.updateAmbient(dt);
+      this.mechs.update(dt);
+      this.companion.update(dt, this.input);
+      this.war.update(dt, this.input, canMove);
       this.planet.update(dt);
       this.baseUI.update();
       return;
@@ -515,6 +645,10 @@ export class Game {
     this.input.update();
 
     if (playing) this.waves.update(dt);
+    if (playing && this.warTimer > 0) {
+      this.warTimer -= dt;
+      if (this.warTimer <= 0) this.enterBaseBattle();
+    }
 
     if (manning) {
       // The player is in a turret: the docked ship idles, the turret takes the input.
@@ -537,6 +671,7 @@ export class Game {
     this.planet.setShield(this.shieldReduction);
 
     this.planet.update(dt);
+    if (this.aerostats) this.aerostats.rotation.y = this.planet.surface.rotation.y;
     this.asteroids.update(dt);
     this._refreshTargets();
     this.enemies.update(dt, {
@@ -544,6 +679,7 @@ export class Game {
       planetRadius: CONFIG.planet.radius,
       lasers: this.enemyLasers,
       time: this.time,
+      onLanded: (e) => this._onDropshipLanded(e),
     });
     if (this.state !== 'menu') {
       this.bosses.update(dt, {
@@ -559,6 +695,7 @@ export class Game {
       this.turrets.update(dt, {
         targets: this.targets,
         lasers: this.turretLasers,
+        heavy: this.heavyLasers,
         missiles: this.missiles,
         time: this.time,
         onFire: (type, slot) => this._turretSound(type, slot),
@@ -567,6 +704,7 @@ export class Game {
     }
     this.lasers.update(dt);
     this.turretLasers.update(dt);
+    this.heavyLasers.update(dt);
     this.enemyLasers.update(dt);
     if (this.state !== 'menu') this._collisions();
 
@@ -733,16 +871,20 @@ export class Game {
     }
 
     // Turret lasers vs enemies (they pass harmlessly through everything else).
-    for (const l of this.turretLasers.list) {
-      if (!l.active) continue;
-      for (const e of this.targets) {
-        if (!e.active) continue;
-        const hit = segmentHitsSphere(l.prev, l.mesh.position, e.group.position, e.radius);
-        if (!hit) continue;
-        this.turretLasers.kill(l);
-        this.effects.sparks(hit, 6, new THREE.Color(1, 3.5, 3), 16, 0.4, 0.25);
-        this._hitTarget(e, l.damage, hit);
-        break;
+    for (const pool of [this.turretLasers, this.heavyLasers]) {
+      const heavy = pool === this.heavyLasers;
+      for (const l of pool.list) {
+        if (!l.active) continue;
+        for (const e of this.targets) {
+          if (!e.active) continue;
+          const hit = segmentHitsSphere(l.prev, l.mesh.position, e.group.position, e.radius + (heavy ? 1 : 0));
+          if (!hit) continue;
+          pool.kill(l);
+          if (heavy) this.effects.sparks(hit, 14, new THREE.Color(5, 1.5, 1), 28, 0.6, 0.45);
+          else this.effects.sparks(hit, 6, new THREE.Color(1, 3.5, 3), 16, 0.4, 0.25);
+          this._hitTarget(e, l.damage, hit);
+          break;
+        }
       }
     }
 
@@ -927,10 +1069,12 @@ export class Game {
     const cfg = CONFIG.enemies[e.type];
     const p = e.group.position;
     this.effects.explosion(p, e.radius * 1.3, 0);
-    this.audio.explosion(e.type === 'bomber' ? 1.5 : 1);
+    const big = e.type === 'bomber' || e.type === 'dropship';
+    this.audio.explosion(big ? 1.5 : 1);
     this.score += cfg.score * this.waves.level;
     this.pickups.spawnCoins(p, cfg.coins, 1);
-    if (e.type === 'bomber') this.pickups.spawnCoins(p, 1, 5);
+    if (big) this.pickups.spawnCoins(p, e.type === 'dropship' ? 2 : 1, 5);
+    if (e.type === 'dropship') this.hud.banner('DROPSHIP DOWN', 'Its boarding party died with it', { duration: 2000 });
   }
 
   _onAsteroidDestroyed({ position, radius }) {

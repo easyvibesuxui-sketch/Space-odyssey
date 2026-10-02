@@ -4,6 +4,15 @@ import { CONFIG } from '../config.js';
 // so applying them twice never compounds.
 const BASE = structuredClone({ ship: CONFIG.ship, laser: CONFIG.laser, coins: CONFIG.coins });
 
+export const MAX_UPGRADE = 10;
+
+// Costs for the first five levels are hand-tuned; later levels get steadily pricier.
+const curve = (first) => {
+  const out = [...first];
+  while (out.length < MAX_UPGRADE) out.push(Math.round((out[out.length - 1] * 1.5) / 10) * 10);
+  return out;
+};
+
 export const UPGRADES = [
   {
     id: 'damage',
@@ -11,7 +20,7 @@ export const UPGRADES = [
     desc: '+20% laser damage',
     icon: 'up-damage.jpg',
     color: '#4fd8ff',
-    costs: [80, 140, 220, 320, 450],
+    costs: curve([80, 140, 220, 320, 450]),
     apply: (l) => (CONFIG.laser.damage = BASE.laser.damage * (1 + 0.2 * l)),
     value: () => `${CONFIG.laser.damage.toFixed(0)} dmg`,
   },
@@ -21,7 +30,7 @@ export const UPGRADES = [
     desc: '+12% fire rate',
     icon: 'up-firerate.jpg',
     color: '#b98cff',
-    costs: [90, 150, 230, 330, 460],
+    costs: curve([90, 150, 230, 330, 460]),
     apply: (l) => (CONFIG.laser.fireInterval = BASE.laser.fireInterval / (1 + 0.12 * l)),
     value: () => `${(1 / CONFIG.laser.fireInterval).toFixed(1)} shots/s`,
   },
@@ -31,7 +40,7 @@ export const UPGRADES = [
     desc: '+25 max hull',
     icon: 'up-hull.jpg',
     color: '#ff9b3d',
-    costs: [70, 120, 190, 280, 400],
+    costs: curve([70, 120, 190, 280, 400]),
     apply: (l) => (CONFIG.ship.hull = BASE.ship.hull + 25 * l),
     value: () => `${CONFIG.ship.hull} hull`,
   },
@@ -41,7 +50,7 @@ export const UPGRADES = [
     desc: '+20 shield, +15% recharge',
     icon: 'up-shield.jpg',
     color: '#3da0ff',
-    costs: [80, 140, 210, 300, 420],
+    costs: curve([80, 140, 210, 300, 420]),
     apply: (l) => {
       CONFIG.ship.shield = BASE.ship.shield + 20 * l;
       CONFIG.ship.shieldRegenRate = BASE.ship.shieldRegenRate * (1 + 0.15 * l);
@@ -51,12 +60,12 @@ export const UPGRADES = [
   {
     id: 'engine',
     name: 'Engine Tuning',
-    desc: '+8% speed, +25 boost energy',
+    desc: '+6% speed, +25 boost energy',
     icon: 'up-engine.jpg',
     color: '#9fe8ff',
-    costs: [60, 110, 170, 250, 350],
+    costs: curve([60, 110, 170, 250, 350]),
     apply: (l) => {
-      const k = 1 + 0.08 * l;
+      const k = 1 + 0.06 * l;
       CONFIG.ship.speed = BASE.ship.speed * k;
       CONFIG.ship.maxSpeed = BASE.ship.maxSpeed * k;
       CONFIG.ship.boostSpeed = BASE.ship.boostSpeed * k;
@@ -70,13 +79,11 @@ export const UPGRADES = [
     desc: '+15% coins from every wreck',
     icon: 'up-magnet.jpg',
     color: '#ffc94a',
-    costs: [50, 90, 140, 200, 280],
+    costs: curve([50, 90, 140, 200, 280]),
     apply: (l) => (CONFIG.coins.bonus = BASE.coins.bonus + 0.15 * l),
     value: () => `+${Math.round(CONFIG.coins.bonus * 100)}% salvage`,
   },
 ];
-
-export const MAX_UPGRADE = 5;
 
 export function emptyUpgrades() {
   return Object.fromEntries(UPGRADES.map((u) => [u.id, 0]));

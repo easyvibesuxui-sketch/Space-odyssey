@@ -108,7 +108,8 @@ export class ShipMods {
     m.guns.push(...this.baseGuns);
     const { x: W, y: H, z: L } = m.size;
     const u = L / 6.5; // ship-relative unit (player GLB is 6.5 long)
-    const lv = (id) => levels?.[id] ?? 0;
+    // Ten upgrade levels map onto five visual tiers.
+    const lv = (id) => Math.ceil((levels?.[id] ?? 0) / 2);
 
     const dark = new THREE.MeshStandardMaterial({ color: 0x2b3038, metalness: 0.75, roughness: 0.35 });
     const plateMat = new THREE.MeshStandardMaterial({ color: 0x7c848f, metalness: 0.7, roughness: 0.35 });

@@ -88,6 +88,9 @@ export class Waves {
     const L = this.level;
     const fighters = 2 + n + (L - 1) * 2;
     const bombers = n >= 2 ? Math.floor(n / 2) + (L - 1) : 0;
+    // Elite interceptors from level 2; troop dropships try to land and storm the base.
+    const interceptors = L >= 2 && n >= 2 ? Math.floor((L - 1) * 0.7 + n / 3) : 0;
+    const dropships = (L === 1 ? n === 3 : n === 2 || n === 4 || n === 5) ? 1 + Math.floor((L - 1) / 2) : 0;
 
     // Attack from one or two directions, roughly around the equator.
     const groups = n >= 3 ? 2 : 1;
@@ -99,6 +102,8 @@ export class Waves {
     const list = [];
     for (let i = 0; i < fighters; i++) list.push('fighter');
     for (let i = 0; i < bombers; i++) list.push('bomber');
+    for (let i = 0; i < interceptors; i++) list.push('interceptor');
+    for (let i = 0; i < dropships; i++) list.push('dropship');
     this.queue = list.map((type, i) => {
       const dir = dirs[i % groups];
       const pos = dir.clone().multiplyScalar(CONFIG.waves.spawnDistance);
@@ -107,6 +112,6 @@ export class Waves {
     });
     this.spawnTimer = 0;
     this.state = 'active';
-    this.cb.onWaveStart?.({ level: L, wave: n, fighters, bombers, dirs });
+    this.cb.onWaveStart?.({ level: L, wave: n, fighters, bombers, interceptors, dropships, dirs });
   }
 }

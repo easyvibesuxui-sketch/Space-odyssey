@@ -182,9 +182,9 @@ export class Hud {
     for (const e of game.enemies.list) {
       if (!e.active) continue;
       const [x, y, h] = toRadar(e.group.position);
-      ctx.fillStyle = e.type === 'bomber' ? '#ff9b3d' : '#ff4d5e';
+      ctx.fillStyle = { bomber: '#ff9b3d', dropship: '#ffd23d', interceptor: '#ff5cf0' }[e.type] ?? '#ff4d5e';
       ctx.strokeStyle = ctx.fillStyle;
-      const r = e.type === 'bomber' ? 6 : 4.5;
+      const r = { bomber: 6, dropship: 7.5, interceptor: 5 }[e.type] ?? 4.5;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       if (h < -15) ctx.stroke();

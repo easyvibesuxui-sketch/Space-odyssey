@@ -4,14 +4,15 @@ import { makePlayerModel } from '../entities/Ship.js';
 import { instantiate } from '../core/Models.js';
 
 // Room layout (metres). The front (z = FRONT) is open to space.
-const HALF_W = 24;
-const FRONT = -30;
-const BACK = 18;
-const HEIGHT = 14;
-const EYE = 1.7;
+export const HALF_W = 24;
+export const FRONT = -30;
+export const BACK = 18;
+export const HEIGHT = 14;
+export const EYE = 1.7;
 const PAD = new THREE.Vector3(0, 0, -8);
 const TERMINAL = new THREE.Vector3(-11, 0, 3);
 const CARGO = new THREE.Vector3(11, 0, 3);
+export const ARMORY = new THREE.Vector3(17, 0, 11);
 
 const _dir = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -36,12 +37,16 @@ export class Hangar {
 
     this.scene.environment = game.scene.environment;
     this.scene.environmentIntensity = 0.2;
+    this.scene.add(this.camera); // so first-person viewmodels attached to it render
+    // Round obstacles { c, r } (radius before adding the mover's own radius).
+    this.obstacles = [{ c: PAD, r: 9.0 }, { c: TERMINAL, r: 1.6 }, { c: CARGO, r: 3.6 }, { c: ARMORY, r: 1.5 }];
 
     this._buildRoom();
     this._buildLights();
     this._buildPadAndShip();
     this._buildTerminal();
     this._buildCargo();
+    this._buildArmory();
     this._buildOutside();
     this._buildCorridor();
     this._bindLook(game.canvas);
@@ -311,8 +316,32 @@ export class Hangar {
     this.interactables.push({ id: 'cargo', mesh: hit, reach: 7 });
   }
 
+  _buildArmory() {
+    const g = new THREE.Group();
+    g.position.copy(ARMORY);
+    g.rotation.y = Math.PI * 0.75; // face the room centre
+    this.scene.add(g);
+    const metal = new THREE.MeshStandardMaterial({ color: 0x4a3a2e, metalness: 0.7, roughness: 0.35 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.1, 1.3), metal);
+    base.position.y = 0.55;
+    g.add(base);
+    this.armoryScreen = new ScreenTexture('ARMORY', 'Mechs · sentries · crew', '#ff9b3d');
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.3), new THREE.MeshBasicMaterial({ map: this.armoryScreen.texture, toneMapped: false }));
+    screen.position.set(0, 1.6, 0.2);
+    screen.rotation.x = -0.45;
+    g.add(screen);
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.5, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.4, 0.3) }));
+    beacon.position.set(1.15, 1.35, -0.4);
+    g.add(beacon);
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(3, 3.2, 2.4), new THREE.MeshBasicMaterial({ visible: false }));
+    hit.position.y = 1.5;
+    g.add(hit);
+    this.interactables.push({ id: 'armory', mesh: hit, reach: 6 });
+  }
+
   _buildOutside() {
     this.sky = new Sky(this.scene);
+    this.sky.addGasGiant(this.game.assets.models);
     // The homeworld seen from orbit, sharing the live planet's materials (so damage shows).
     const planet = this.game.planet;
     const view = new THREE.Group();
@@ -382,6 +411,9 @@ export class Hangar {
       if (e.pointerType === 'mouse' && !this.locked) {
         canvas.requestPointerLock?.()?.catch?.(() => {});
       }
+      // In combat (or in a mech) the mouse button fires; E interacts.
+      const combat = this.game.war?.active || this.game.mechs?.piloting;
+      if (e.pointerType === 'mouse' && combat) return;
       if (e.pointerType === 'mouse' && this.locked) {
         this.game.baseUI.interact(this.target);
         return;
@@ -451,7 +483,6 @@ export class Hangar {
   }
 
   update(dt, input, canMove) {
-    this.time += dt;
 
     // Walk relative to where we're looking (horizontal only).
     let fwd = 0;
@@ -477,7 +508,7 @@ export class Hangar {
     const move = new THREE.Vector3().addScaledVector(_dir, fwd).addScaledVector(_right, strafe);
     if (move.lengthSq() > 1) move.normalize();
     this.pos.addScaledVector(move, speed * dt);
-    this._collide();
+    this.collide(this.pos, 0.6, true);
 
     const moving = move.lengthSq() > 0.01;
     this.bob += dt * (moving ? 9 : 0);
@@ -486,20 +517,27 @@ export class Hangar {
     this.camera.position.set(this.pos.x, EYE + bobY, this.pos.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
     this.camera.updateMatrixWorld();
+    this.updateTarget();
+  }
 
-    // What are we looking at?
+  // What are we looking at? (first person only)
+  updateTarget() {
     this.raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
     this.raycaster.far = 14;
     this.target = null;
     for (const it of this.interactables) {
-      const hit = this.raycaster.intersectObject(it.mesh, false)[0];
+      if (it.enabled === false) continue;
+      const hit = this.raycaster.intersectObject(it.mesh, true)[0];
       if (hit && hit.distance <= it.reach && (!this.target || hit.distance < this.target.distance)) {
         this.target = { id: it.id, distance: hit.distance };
       }
     }
     this.target = this.target?.id ?? null;
+  }
 
-    // Ambient animation.
+  // Decorative animation, runs whatever the player is doing.
+  updateAmbient(dt) {
+    this.time += dt;
     this.holo.rotation.y += dt * 0.8;
     this.ship.holder.position.y = 3.0 + Math.sin(this.time * 1.3) * 0.06;
     for (const g of this.ship.model.glows) g.scale.setScalar(0.7 + Math.random() * 0.1);
@@ -509,24 +547,26 @@ export class Hangar {
     this.sky.update(this.camera, this.time);
   }
 
-  _collide() {
-    const p = this.pos;
-    p.x = THREE.MathUtils.clamp(p.x, -HALF_W + 1.4, HALF_W - 1.4);
-    // The corridor is a narrow walkway behind the back wall.
-    const halfDoor = this.corridorLen ? this.game.assets.models.corridor.size.x / 2 - 0.55 : 0;
-    const inDoorway = this.corridorLen && Math.abs(p.x) < halfDoor;
-    p.z = THREE.MathUtils.clamp(p.z, FRONT + 2.2, inDoorway ? BACK + this.corridorLen - 0.9 : BACK - 1.2);
+  // Keeps a mover of radius r inside the hangar and out of the round obstacles.
+  // Only the player (corridor = true) may walk into the entrance corridor.
+  collide(p, r = 0.6, corridor = false) {
+    p.x = THREE.MathUtils.clamp(p.x, -HALF_W + 0.8 + r, HALF_W - 0.8 - r);
+    const halfDoor = corridor && this.corridorLen ? this.game.assets.models.corridor.size.x / 2 - 0.55 : 0;
+    const inDoorway = halfDoor && Math.abs(p.x) < halfDoor;
+    p.z = THREE.MathUtils.clamp(p.z, FRONT + 1.6 + r, inDoorway ? BACK + this.corridorLen - 0.9 : BACK - 0.6 - r);
     if (p.z > BACK - 1.2) p.x = THREE.MathUtils.clamp(p.x, -halfDoor, halfDoor);
-    // Round obstacles: the landing pad/ship, the terminal and the cargo stack.
-    for (const [c, r] of [[PAD, 9.6], [TERMINAL, 2.2], [CARGO, 4.2]]) {
-      const dx = p.x - c.x;
-      const dz = p.z - c.z;
+    for (const o of this.obstacles) {
+      if (o.enabled === false) continue;
+      const rr = o.r + r;
+      const dx = p.x - o.c.x;
+      const dz = p.z - o.c.z;
       const d = Math.hypot(dx, dz);
-      if (d < r && d > 0.0001) {
-        p.x = c.x + (dx / d) * r;
-        p.z = c.z + (dz / d) * r;
+      if (d < rr && d > 0.0001) {
+        p.x = o.c.x + (dx / d) * rr;
+        p.z = o.c.z + (dz / d) * rr;
       }
     }
+    return p;
   }
 }
 

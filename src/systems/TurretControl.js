@@ -70,7 +70,7 @@ export class TurretControl {
     slot.turret.model.rim.visible = false;
     slot.turret.model.halo.visible = false;
     // Gunner's-eye view: hide the head shell so the barrels are what you see.
-    slot.turret.model.head.children[0].visible = false;
+    for (const o of slot.turret.model.shell) o.visible = false;
     g.state = 'turret';
     document.body.classList.add('turret-mode');
     this.ui.classList.remove('hidden');
@@ -104,7 +104,7 @@ export class TurretControl {
   }
 
   _hint(type) {
-    if (type === 'laser') return 'Aim and fire · manual control deals +50% damage';
+    if (type === 'laser' || type === 'cannon') return 'Aim and fire · manual control deals +50% damage';
     if (type === 'missile') return 'Hold the crosshair on a target to lock, then fire a 4-missile salvo';
     return 'Fire to overcharge the planetary shield';
   }
@@ -116,7 +116,7 @@ export class TurretControl {
     if (slot.turret) {
       slot.turret.manned = false;
       slot.turret.model.rim.visible = true;
-      slot.turret.model.head.children[0].visible = true;
+      for (const o of slot.turret.model.shell) o.visible = true;
       slot.turret.model.halo.visible = !(slot.turret.disabled > 0);
     }
     this.slot = null;
@@ -194,7 +194,7 @@ export class TurretControl {
     // Head follows the aim; the camera is the gunner's eye, just above the barrels.
     t.model.head.lookAt(_v.copy(slot.pos).addScaledVector(dir, 200));
     const cam = g.camera;
-    cam.position.copy(slot.pos).addScaledVector(slot.normal, 1.4 * scale + 1.5).addScaledVector(dir, -0.6);
+    cam.position.copy(slot.pos).addScaledVector(slot.normal, t.model.eye * scale + 1.5).addScaledVector(dir, -0.6);
     cam.up.copy(slot.normal);
     cam.lookAt(_v.copy(cam.position).add(dir));
     const s = g.effects.shake;
@@ -213,14 +213,19 @@ export class TurretControl {
 
     if (offline) {
       status = `OFFLINE · EMP · rebooting ${Math.ceil(t.disabled)}s`;
-    } else if (t.type === 'laser') {
-      status = `MANUAL FIRE · +50% damage · ${(1 / (stats.interval * 0.6)).toFixed(1)} shots/s`;
+    } else if (t.type === 'laser' || t.type === 'cannon') {
+      const heavy = t.type === 'cannon';
+      const interval = stats.interval * (heavy ? 0.75 : 0.6);
+      status = heavy && this.cooldown > 0
+        ? `RECHARGING ${this.cooldown.toFixed(1)}s`
+        : `MANUAL FIRE · +50% damage · ${(1 / interval).toFixed(1)} shots/s`;
       if (g.input.fire && this.cooldown <= 0) {
-        this.cooldown = stats.interval * 0.6;
+        this.cooldown = interval;
         const muzzle = t.model.muzzles[t.gunIndex].getWorldPosition(new THREE.Vector3());
         t.gunIndex = (t.gunIndex + 1) % t.model.muzzles.length;
-        g.turretLasers.fire(muzzle, aim.point, stats.damage * MANUAL_DAMAGE);
-        g.audio.laser(0.5);
+        (heavy ? g.heavyLasers : g.turretLasers).fire(muzzle, aim.point, stats.damage * MANUAL_DAMAGE);
+        if (heavy) g.audio.explosion?.(0.4);
+        else g.audio.laser(0.5);
       }
     } else if (t.type === 'missile') {
       // Lock on to whatever stays under the crosshair. The lock is sticky: it holds while the

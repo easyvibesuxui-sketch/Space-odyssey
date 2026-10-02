@@ -166,7 +166,24 @@ export class Sky {
 
   }
 
+  // A distant gas giant (texture taken from the Jupiter model).
+  addGasGiant(models) {
+    let map = null;
+    models?.jupiter?.template.traverse((o) => {
+      if (!map && o.isMesh) map = o.material.map;
+    });
+    if (!map) return;
+    const mat = new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0, fog: false, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.06 });
+    const giant = new THREE.Mesh(new THREE.SphereGeometry(150, 64, 40), mat);
+    giant.position.set(-0.62, 0.2, 0.76).normalize().multiplyScalar(1450);
+    giant.rotation.set(0.25, 0, 0.12);
+    giant.renderOrder = 1;
+    this.group.add(giant);
+    this.giant = giant;
+  }
+
   update(camera, time) {
+    if (this.giant) this.giant.rotation.y = time * 0.004;
     // Sky is infinitely far: it follows the camera.
     this.group.position.copy(camera.position);
     this.sunCore.material.opacity = 0.9 + Math.sin(time * 3.1) * 0.05 + Math.sin(time * 7.3) * 0.03;

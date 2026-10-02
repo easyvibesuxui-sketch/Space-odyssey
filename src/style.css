@@ -693,7 +693,7 @@ body.touch .base-hint.touch-only { display: block; }
 .upgrade-card .card-img { max-width: 96px; }
 .upgrade-card .card-desc em { color: var(--accent); font-style: normal; }
 .pips { display: flex; gap: 4px; }
-.pips i { width: 14px; height: 5px; border-radius: 2px; background: rgba(255, 255, 255, 0.15); }
+.pips i { width: 9px; height: 5px; border-radius: 2px; background: rgba(255, 255, 255, 0.15); }
 .pips i.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
 .card-cost.max { color: var(--green); }
 .action.unload { background: rgba(255, 201, 74, 0.25); border: 1px solid var(--gold); }
@@ -992,6 +992,98 @@ body.base-mode #turret-badges { display: none; }
 .ship-mods .mod.has { opacity: 1; }
 .ship-mods .mod b { font-size: 0.55rem; letter-spacing: 0.1em; color: var(--accent); width: 26px; }
 .ship-mods .mod span { display: flex; gap: 2px; }
-.ship-mods .mod i { width: 7px; height: 4px; border-radius: 1px; background: rgba(255, 255, 255, 0.15); }
+.ship-mods .mod i { width: 4px; height: 4px; border-radius: 1px; background: rgba(255, 255, 255, 0.15); }
 .ship-mods .mod i.on { background: var(--accent); box-shadow: 0 0 4px var(--accent); }
 @media (max-width: 600px) { .ship-mods { display: none; } }
+
+/* ---------- Ground war in the base ---------- */
+#war-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#war-hud.hidden { display: none; }
+.war-status {
+  position: absolute;
+  top: calc(max(16px, env(safe-area-inset-top)) + 112px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  color: #fff;
+  background: rgba(120, 10, 16, 0.65);
+  border: 1px solid #ff4d5e;
+  border-radius: 4px;
+  box-shadow: 0 0 18px rgba(255, 60, 70, 0.5);
+  animation: war-blink 1.2s ease-in-out infinite;
+  white-space: nowrap;
+}
+@keyframes war-blink { 50% { box-shadow: 0 0 4px rgba(255, 60, 70, 0.2); } }
+.war-bars {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(4, 16, 32, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.war-bar { display: flex; align-items: center; gap: 10px; }
+.war-bar label { width: 150px; font-size: 0.6rem; letter-spacing: 0.14em; color: rgba(223, 246, 255, 0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.war-bar .bar { width: clamp(100px, 18vw, 180px); }
+#war-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 45%, rgba(255, 30, 20, 0.45) 100%);
+  opacity: 0;
+  transition: opacity 0.35s;
+}
+#war-flash.on { opacity: 1; transition: none; }
+#war-dead {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.1rem;
+  letter-spacing: 0.2em;
+  color: #ff6b75;
+  text-shadow: 0 0 12px rgba(255, 60, 70, 0.8);
+}
+#war-dead.hidden { display: none; }
+body.war-mode .base-dot,
+body.mech-mode .base-dot {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  background: none;
+  border: 2px solid rgba(255, 120, 110, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 80, 70, 0.6);
+}
+body.mech-mode .base-dot { border-color: rgba(79, 216, 255, 0.9); box-shadow: 0 0 8px rgba(79, 216, 255, 0.6); }
+body.base-mode.war-mode #fire-btn,
+body.base-mode.mech-mode #fire-btn { display: block; }
+body.base-mode.war-mode #use-btn,
+body.base-mode.mech-mode #use-btn { bottom: max(140px, env(safe-area-inset-bottom)); }
+
+/* Armory */
+.mech-grid { grid-template-columns: repeat(2, 1fr); margin: 8px 0 14px; }
+.mech-card { cursor: default; text-align: left; align-items: flex-start; }
+.mech-card.focus { outline: 2px solid var(--accent); box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 50%, transparent); }
+.mech-card .action { width: 100%; margin-top: 6px; }
+.mech-stats { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.8rem; color: rgba(223, 246, 255, 0.7); }
+.mech-stats i { font-style: normal; }
+.mech-stats b { color: var(--accent); }
+.panel-title small { font-family: 'Rajdhani', sans-serif; font-size: 0.85rem; letter-spacing: 0.02em; color: rgba(223, 246, 255, 0.6); text-transform: none; }
+.action.buy-mech { background: rgba(255, 201, 74, 0.2); border: 1px solid var(--gold); }
+@media (max-width: 600px) {
+  .mech-grid { grid-template-columns: 1fr; }
+  .war-bar label { width: 90px; }
+}
+#build-panel .cards { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 600px) { #build-panel .cards { grid-template-columns: repeat(2, 1fr); } }
